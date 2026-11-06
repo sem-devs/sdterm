@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { IPC, type SemTermApi } from '@shared/ipc'
+import { IPC, type SdtermApi } from '@shared/ipc'
 import type { StoreData } from '@shared/data'
 
 function subscribe<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
@@ -8,7 +8,7 @@ function subscribe<A extends unknown[]>(channel: string, cb: (...args: A) => voi
   return () => ipcRenderer.removeListener(channel, handler)
 }
 
-const api: SemTermApi = {
+const api: SdtermApi = {
   platform: process.platform,
   initial: ipcRenderer.sendSync(IPC.storeLoad) as StoreData,
   pty: {
@@ -31,7 +31,9 @@ const api: SemTermApi = {
   widgets: {
     open: (kind) => ipcRenderer.send(IPC.widgetOpen, kind),
     close: () => ipcRenderer.send(IPC.widgetClose),
-    setPinned: (pinned) => ipcRenderer.send(IPC.widgetPin, pinned)
+    setPinned: (pinned) => ipcRenderer.send(IPC.widgetPin, pinned),
+    setSize: (width, height) => ipcRenderer.send(IPC.widgetSetSize, width, height),
+    toggleFill: () => ipcRenderer.invoke(IPC.widgetToggleFill)
   },
   app: {
     info: () => ipcRenderer.invoke(IPC.appInfo),

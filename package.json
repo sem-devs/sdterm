@@ -1,10 +1,10 @@
 {
-  "name": "sem-term",
+  "name": "sdterm",
   "version": "1.0.0",
   "description": "A local terminal workspace: many terminals, one window.",
   "main": "./out/main/index.js",
   "author": "SEM Devs",
-  "homepage": "https://github.com/sem-devs/sem-term",
+  "homepage": "https://github.com/sem-devs/sdterm",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -62,5 +62,5 @@
     "typescript": "^5.9.3",
     "vite": "^8.3.4"
   },
-  "productName": "SEM Term"
+  "productName": "sdterm"
 }

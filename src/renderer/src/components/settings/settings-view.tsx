@@ -22,6 +22,7 @@ const SECTIONS = [
 
 function Appearance(): React.JSX.Element {
   const theme = useSettings((s) => s.settings.appearance.theme)
+  const startMaximized = useSettings((s) => s.settings.window.startMaximized)
   const set = useSettings((s) => s.set)
   return (
     <Section
@@ -38,6 +39,17 @@ function Appearance(): React.JSX.Element {
             { value: 'light', label: 'Light' },
             { value: 'dark', label: 'Dark' }
           ]}
+        />
+      </Row>
+      <Row
+        label="Open at screen size"
+        hint="The main window opens as large as your screen, but stays a normal window: no full-screen mode, still resizable by dragging its edges."
+        htmlFor="start-maximized"
+      >
+        <Toggle
+          id="start-maximized"
+          checked={startMaximized}
+          onChange={(v) => set('window', 'startMaximized', v)}
         />
       </Row>
     </Section>
@@ -334,9 +346,9 @@ function About(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-10">
       <section className="flex flex-col gap-4">
-        <BrandLogo className="text-foreground h-9 w-auto self-start" />
+        <BrandLogo className="text-foreground h-6 w-auto self-start" />
         <div className="flex flex-col gap-1">
-          <h2 className="font-display text-lg font-semibold tracking-tight">SEM Term</h2>
+          <h2 className="font-display text-lg font-semibold tracking-tight">sdterm</h2>
           <p className="text-muted-foreground max-w-[56ch] text-sm">
             A terminal workspace by SEM Devs: many terminals in one window, each with a name, a note
             and a color, plus live resource monitors you can pop out.

@@ -20,6 +20,10 @@ export interface Settings {
   appearance: {
     theme: ThemeMode
   }
+  window: {
+    /** Open as large as the screen, as a normal resizable window (not full-screen mode). */
+    startMaximized: boolean
+  }
   terminal: {
     font: FontChoice
     customFontFamily: string
@@ -54,6 +58,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   appearance: { theme: 'system' },
+  window: { startMaximized: true },
   terminal: {
     font: 'geist-mono',
     customFontFamily: '',

@@ -1,7 +1,7 @@
-import type { SemTermApi } from '../shared/ipc'
+import type { SdtermApi } from '../shared/ipc'
 
 declare global {
   interface Window {
-    api: SemTermApi
+    api: SdtermApi
   }
 }

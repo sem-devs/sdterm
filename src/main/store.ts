@@ -51,7 +51,7 @@ function sanitizeBounds(v: unknown): StoreData['widgetBounds'] {
 }
 
 export function initStore(): void {
-  file = join(app.getPath('userData'), 'sem-term.json')
+  file = join(app.getPath('userData'), 'sdterm.json')
   try {
     const raw: unknown = JSON.parse(readFileSync(file, 'utf8'))
     const o = isObj(raw) ? raw : {}

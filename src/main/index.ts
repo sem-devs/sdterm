@@ -18,8 +18,8 @@ import { closeAllWidgets, registerWidgetIpc } from './widgets'
 import { appWebPreferences, chrome, hardenWindow, isMac, loadRenderer, syncChrome } from './window'
 import { runDevCapture } from './dev-capture'
 
-if (!app.isPackaged && process.env.SEM_TERM_USER_DATA) {
-  app.setPath('userData', process.env.SEM_TERM_USER_DATA)
+if (!app.isPackaged && process.env.SDTERM_USER_DATA) {
+  app.setPath('userData', process.env.SDTERM_USER_DATA)
 }
 
 let mainWindow: BrowserWindow | null = null
@@ -45,7 +45,13 @@ function createWindow(): void {
   mainWindow = win
 
   hardenWindow(win)
-  win.on('ready-to-show', () => win.show())
+  const startMaximized = getStore().settings.window.startMaximized
+  win.on('ready-to-show', () => {
+    // Screen-sized but still a normal window: no full-screen Space, resizable, and the
+    // green/maximize button toggles back to the previous size.
+    if (startMaximized) win.maximize()
+    win.show()
+  })
   // Pop-out widgets belong to the session: they go away with the main window.
   win.on('closed', () => {
     mainWindow = null
@@ -79,9 +85,9 @@ function registerAppIpc(): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.semdevs.semterm')
+  electronApp.setAppUserModelId('com.semdevs.sdterm')
   app.setAboutPanelOptions({
-    applicationName: 'SEM Term',
+    applicationName: 'sdterm',
     applicationVersion: app.getVersion(),
     copyright: 'SEM Devs',
     website: 'https://sem-devs.com'

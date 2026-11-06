@@ -1,7 +1,7 @@
 import type { ThemeMode } from '@shared/settings'
 import { useSettings } from '@/store/settings'
 
-const THEME_EVENT = 'sem-term:theme-change'
+const THEME_EVENT = 'sdterm:theme-change'
 
 function resolve(mode: ThemeMode): 'light' | 'dark' {
   if (mode !== 'system') return mode

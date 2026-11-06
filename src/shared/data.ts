@@ -1,6 +1,6 @@
 import type { PaneColor, Settings } from './settings'
 
-// What is saved to disk (userData/sem-term.json) and handed to every window at startup.
+// What is saved to disk (userData/sdterm.json) and handed to every window at startup.
 
 export interface PersistedPane {
   id: string

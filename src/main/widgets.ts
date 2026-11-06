@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, screen } from 'electron'
+import { BrowserWindow, ipcMain, screen, type Rectangle } from 'electron'
 import { WIDGET_DEFS, WIDGET_KINDS, type WidgetBounds, type WidgetKind } from '@shared/data'
 import { IPC } from '@shared/ipc'
 import { appWebPreferences, chrome, hardenWindow, isMac, loadRenderer } from './window'
@@ -38,6 +38,7 @@ export function openWidget(kind: WidgetKind): void {
     minHeight: def.minHeight,
     show: false,
     frame: false,
+    resizable: true,
     fullscreenable: false,
     maximizable: false,
     alwaysOnTop: pinned,
@@ -70,6 +71,16 @@ export function openWidget(kind: WidgetKind): void {
   loadRenderer(win, { widget: kind })
 }
 
+const beforeFill = new WeakMap<BrowserWindow, Rectangle>()
+
+// "Fill" is the screen's usable area (below the menu bar, beside the dock), not full-screen
+// mode: it never takes over the display and toggles back to the previous size.
+function isFilled(win: BrowserWindow): boolean {
+  const b = win.getBounds()
+  const w = screen.getDisplayMatching(b).workArea
+  return Math.abs(b.width - w.width) < 4 && Math.abs(b.height - w.height) < 4
+}
+
 export function closeAllWidgets(): void {
   for (const win of windows.values()) if (!win.isDestroyed()) win.close()
 }
@@ -79,6 +90,25 @@ export function registerWidgetIpc(): void {
     if (WIDGET_KINDS.includes(kind)) openWidget(kind)
   })
   ipcMain.on(IPC.widgetClose, (event) => BrowserWindow.fromWebContents(event.sender)?.close())
+  ipcMain.on(IPC.widgetSetSize, (event, width: number, height: number) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win || !Number.isFinite(width) || !Number.isFinite(height)) return
+    const work = screen.getDisplayMatching(win.getBounds()).workArea
+    win.setSize(Math.round(Math.min(width, work.width)), Math.round(Math.min(height, work.height)))
+  })
+  ipcMain.handle(IPC.widgetToggleFill, (event): boolean => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+    if (isFilled(win)) {
+      const prev = beforeFill.get(win)
+      if (prev) win.setBounds(prev)
+      else win.setSize(360, 480)
+      return false
+    }
+    beforeFill.set(win, win.getBounds())
+    win.setBounds(screen.getDisplayMatching(win.getBounds()).workArea)
+    return true
+  })
   ipcMain.on(IPC.widgetPin, (event, pinned: boolean) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return

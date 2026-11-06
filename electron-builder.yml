@@ -1,5 +1,5 @@
-appId: com.semdevs.semterm
-productName: SEM Term
+appId: com.semdevs.sdterm
+productName: sdterm
 directories:
   buildResources: build
 files:
@@ -14,7 +14,7 @@ asarUnpack:
   # node-pty ships native binaries and a spawn-helper executable that cannot run from inside the asar.
   - node_modules/node-pty/**
 win:
-  executableName: sem-term
+  executableName: sdterm
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

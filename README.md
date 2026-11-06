@@ -1,4 +1,4 @@
-# SEM Term
+# sdterm
 
 A local terminal workspace: many terminals, one window. Mac and Windows.
 
@@ -8,6 +8,7 @@ Work in progress. It runs real shells (zsh on macOS, PowerShell on Windows) in a
 
 - **Name, note and color per terminal.** Click a terminal's title bar to say what it is for and where you left off. The note shows in the title bar and in the sidebar overview, and everything is saved between launches.
 - **Resource monitors you can pop out.** CPU, RAM, CPU and RAM together, disk I/O and network I/O, docked in the sidebar. Each one (or the whole summary) opens as its own small window that you can place anywhere, keep on top, and that remembers its position.
+- **Windows that behave.** The main window opens as large as the screen but is a normal window (no full-screen mode, resizable by dragging). Pop-outs resize by dragging any edge or the corner handle, and have a button to fill the screen and go back.
 - **Settings for everything personal.** Theme, terminal font, size, cursor, scrollback, shell, start directory, sidebar metrics, units and more, applied live. Open them with Cmd+, (Ctrl+Shift+, on Windows).
 - **SEM Devs branding** from the brand book: logo, palette and fonts (Space Grotesk, Inter).
 
@@ -58,7 +59,7 @@ src/renderer  React app (components, store, theme)
 
 ## Visual checks
 
-`SEM_TERM_CAPTURE_DIR=/some/dir npm start` opens the app, screenshots every window to PNG and quits (development only; see `src/main/dev-capture.ts` for the other variables).
+`SDTERM_CAPTURE_DIR=/some/dir npm start` opens the app, screenshots every window to PNG and quits (development only; see `src/main/dev-capture.ts` for the other variables).
 
 ## Status
 

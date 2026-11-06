@@ -131,7 +131,7 @@ export function Sidebar(): React.JSX.Element {
     <aside className="bg-card flex w-60 shrink-0 flex-col border-r">
       {/* Leaves room for the macOS traffic lights; draggable like the rest of the title bar. */}
       <div className={cn('app-drag flex h-10 shrink-0 items-center', isMac ? 'pl-20' : 'pl-4')}>
-        <span className="font-display text-[13px] font-semibold tracking-tight">SEM Term</span>
+        <span className="font-display text-[13px] font-semibold tracking-tight">sdterm</span>
       </div>
 
       <div className="flex items-center justify-between pr-2 pl-4">
@@ -162,8 +162,8 @@ export function Sidebar(): React.JSX.Element {
 
       <ResourcesSummary />
 
-      {/* The brand is always on screen, whichever view is open. */}
-      <footer className="flex h-12 shrink-0 items-center justify-between border-t pr-2 pl-4">
+      {/* The brand is always on screen, whichever view is open, but small and quiet. */}
+      <footer className="flex h-9 shrink-0 items-center justify-between border-t pr-1.5 pl-4">
         <a
           href="https://sem-devs.com"
           target="_blank"
@@ -171,13 +171,13 @@ export function Sidebar(): React.JSX.Element {
           aria-label="SEM Devs website"
           className="focus-visible:ring-ring/60 rounded-sm outline-none focus-visible:ring-2"
         >
-          <BrandLogo className="text-foreground h-[18px] w-auto" />
+          <BrandLogo className="text-foreground h-3.5 w-auto opacity-60 transition-opacity hover:opacity-100" />
         </a>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               aria-label="Settings"
               aria-pressed={view === 'settings'}
               className={cn(view === 'settings' && 'bg-accent text-foreground')}

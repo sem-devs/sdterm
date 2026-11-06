@@ -73,7 +73,7 @@ export function registerPtyIpc(): void {
           ...process.env,
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor',
-          TERM_PROGRAM: 'sem-term'
+          TERM_PROGRAM: 'sdterm'
         } as Record<string, string>
       })
 

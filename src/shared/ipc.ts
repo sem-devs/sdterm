@@ -19,7 +19,9 @@ export const IPC = {
   resSample: 'resources:sample',
   widgetOpen: 'widget:open',
   widgetClose: 'widget:close',
-  widgetPin: 'widget:pin'
+  widgetPin: 'widget:pin',
+  widgetSetSize: 'widget:set-size',
+  widgetToggleFill: 'widget:toggle-fill'
 } as const
 
 export type AppCommand = 'new-pane' | 'close-pane' | 'new-workspace' | 'open-settings'
@@ -45,7 +47,7 @@ export interface PtyApi {
   onExit: (cb: (id: string, exitCode: number) => void) => () => void
 }
 
-export interface SemTermApi {
+export interface SdtermApi {
   platform: NodeJS.Platform
   /** Loaded synchronously at startup so the first paint already has the right theme and layout. */
   initial: StoreData
@@ -65,6 +67,10 @@ export interface SemTermApi {
     /** Closes the widget window that calls it. */
     close: () => void
     setPinned: (pinned: boolean) => void
+    /** Resizes the calling window (used by the drag grip). */
+    setSize: (width: number, height: number) => void
+    /** Fills the screen's usable area, or goes back to the previous size. Returns the new state. */
+    toggleFill: () => Promise<boolean>
   }
   app: {
     info: () => Promise<AppInfo>
