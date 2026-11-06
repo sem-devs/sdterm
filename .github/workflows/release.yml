@@ -1,0 +1,71 @@
+name: Build installers
+
+# Builds sdterm for macOS, Windows and Linux. Run it by hand (Actions, "Build installers") to get
+# the installers as downloadable artifacts, or push a tag like v1.0.2 to also draft a GitHub release.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon and Intel)
+            os: macos-latest
+            script: build:mac
+            artifact: sdterm-macos
+            files: |
+              dist/*.dmg
+              dist/*.zip
+          - name: Windows (x64 and ARM64)
+            os: windows-latest
+            script: build:win
+            artifact: sdterm-windows
+            files: dist/*.exe
+          - name: Linux (x64)
+            os: ubuntu-latest
+            script: build:linux
+            artifact: sdterm-linux
+            files: |
+              dist/*.AppImage
+              dist/*.deb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # node-pty has no prebuilt binary for Linux, so it is compiled during npm ci.
+      - name: Build tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 libarchive-tools rpm
+      - run: npm ci
+      - run: npm run ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: installers/*

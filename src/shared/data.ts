@@ -113,6 +113,8 @@ export interface ProcessSnapshot {
 export interface AppInfo {
   name: string
   version: string
+  electron: string
+  chrome: string
   platform: NodeJS.Platform
   storePath: string
 }

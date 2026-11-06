@@ -1,10 +1,14 @@
 {
   "name": "sdterm",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "A local terminal workspace: many terminals, one window.",
   "main": "./out/main/index.js",
-  "author": "SEM Devs",
-  "homepage": "https://github.com/sem-devs/sdterm",
+  "author": {
+    "name": "SEM Devs",
+    "email": "info@sem-devs.com",
+    "url": "https://sem-devs.com"
+  },
+  "homepage": "https://sem-devs.com",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -16,8 +20,9 @@
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "install-electron && electron-builder install-app-deps && node scripts/fix-pty-perms.mjs",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac"
+    "build:win": "npm run typecheck && electron-vite build && electron-builder --win",
+    "build:mac": "npm run typecheck && electron-vite build && electron-builder --mac",
+    "build:linux": "npm run typecheck && electron-vite build && electron-builder --linux"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
@@ -62,5 +67,9 @@
     "typescript": "^5.9.3",
     "vite": "^8.3.4"
   },
-  "productName": "sdterm"
+  "productName": "sdterm",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sem-devs/sdterm.git"
+  }
 }

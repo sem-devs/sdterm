@@ -43,7 +43,7 @@ export function loadRenderer(win: BrowserWindow, query: Record<string, string> =
 /** Links open in the system browser (http and https only); the app never navigates away. */
 export function hardenWindow(win: BrowserWindow): void {
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    if (/^(https?:\/\/|mailto:)/i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (event, url) => {

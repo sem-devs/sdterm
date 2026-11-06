@@ -34,14 +34,32 @@ npm run dev
 
 Checks: `npm run typecheck`, `npm run lint`, `npm run build`.
 
-## Package
+## Install
+
+Installers are built for every platform with the "Build installers" workflow (GitHub, Actions): run it by hand, or push a tag such as `v1.0.2` to also get a draft release.
+
+| Platform | File                                                                     | Notes                                                                                                    |
+| -------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| macOS    | `sdterm-<version>-mac-arm64.dmg` (Apple Silicon), `-mac-x64.dmg` (Intel) | Open the DMG, drag sdterm to Applications. See below.                                                    |
+| Windows  | `sdterm-<version>-win-x64-setup.exe` (`-arm64-` for ARM)                 | Run the installer.                                                                                       |
+| Linux    | `sdterm-<version>-linux-x64.AppImage` or `.deb`                          | AppImage: `chmod +x` and run. On Ubuntu 24.04 the AppImage may need `--no-sandbox`; the `.deb` does not. |
+
+The builds are not signed with a developer certificate yet, so the first launch shows a warning:
+
+- macOS: right-click the app, choose Open, then Open again (or run `xattr -dr com.apple.quarantine /Applications/sdterm.app`).
+- Windows: SmartScreen shows "Windows protected your PC": choose More info, then Run anyway.
+
+Signing needs an Apple Developer ID certificate and a Windows code-signing certificate; set `mac.identity` and `notarize` in `electron-builder.yml` when they exist.
+
+## Build locally
 
 ```bash
-npm run build:mac   # .dmg
-npm run build:win   # .exe installer
+npm run build:mac   # DMG and ZIP, Apple Silicon and Intel (needs macOS)
+npm run build:win   # NSIS installer (x64, ARM64)
+npm run build:linux # AppImage and deb (needs Linux: node-pty is compiled there)
 ```
 
-Builds are unsigned. macOS Gatekeeper and Windows SmartScreen will warn until signing is set up.
+Output goes to `dist/`. Version 1.0.2.
 
 ## Shortcuts
 

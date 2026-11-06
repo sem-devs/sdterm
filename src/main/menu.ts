@@ -1,4 +1,5 @@
-import { app, Menu, type MenuItemConstructorOptions } from 'electron'
+import { app, Menu, shell, type MenuItemConstructorOptions } from 'electron'
+import { BRAND } from '@shared/brand'
 import { WIDGET_DEFS, WIDGET_KINDS } from '@shared/data'
 import { IPC, type AppCommand } from '@shared/ipc'
 import { openWidget } from './widgets'
@@ -37,7 +38,7 @@ export function installMenu(isDev: boolean): void {
     ]
   }
 
-  const shell: MenuItemConstructorOptions = {
+  const shellMenu: MenuItemConstructorOptions = {
     label: 'Shell',
     submenu: [
       { label: 'New Terminal', accelerator: `${mod}+T`, click: () => send('new-pane') },
@@ -68,9 +69,18 @@ export function installMenu(isDev: boolean): void {
     ]
   }
 
+  const help: MenuItemConstructorOptions = {
+    role: 'help',
+    submenu: [
+      { label: 'Rate sdterm on Google', click: () => void shell.openExternal(BRAND.reviewUrl) },
+      { label: 'SEM Devs Website', click: () => void shell.openExternal(BRAND.website) },
+      { label: 'Contact SEM Devs', click: () => void shell.openExternal(`mailto:${BRAND.email}`) }
+    ]
+  }
+
   const template: MenuItemConstructorOptions[] = isMac
-    ? [appMenu, shell, { role: 'editMenu' }, resources, view, { role: 'windowMenu' }]
-    : [shell, resources, view]
+    ? [appMenu, shellMenu, { role: 'editMenu' }, resources, view, { role: 'windowMenu' }, help]
+    : [shellMenu, resources, view, help]
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }

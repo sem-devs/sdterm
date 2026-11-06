@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC, type TerminalMenuChoice } from '@shared/ipc'
 import type { AppInfo } from '@shared/data'
@@ -18,6 +18,7 @@ import { registerWidgetIpc } from './widgets'
 import { getAppWindows, markQuitting, openAppWindow } from './windows'
 import { isMac, syncChrome } from './window'
 import { runDevCapture } from './dev-capture'
+import icon from '../../resources/icon.png?asset'
 
 if (!app.isPackaged && process.env.SDTERM_USER_DATA) {
   app.setPath('userData', process.env.SDTERM_USER_DATA)
@@ -27,6 +28,8 @@ function registerAppIpc(): void {
   ipcMain.handle(IPC.appInfo, (): AppInfo => ({
     name: app.name,
     version: app.getVersion(),
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
     platform: process.platform,
     storePath: storePath()
   }))
@@ -92,6 +95,9 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
+
+  // A packaged app has its icon; in development the Dock would show Electron's.
+  if (isMac && is.dev) app.dock?.setIcon(nativeImage.createFromPath(icon))
 
   installMenu(is.dev)
 

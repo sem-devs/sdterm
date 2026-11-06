@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, FolderOpen } from '@phosphor-icons/react'
 import type { AppInfo } from '@shared/data'
+import { BRAND } from '@shared/brand'
 import { Button } from '@/components/ui/button'
 import { BrandLogo } from '@/components/brand-logo'
 import { cn } from '@/lib/utils'
 import { useSettings } from '@/store/settings'
 import { useUi } from '@/store/ui'
 import { Choice, Range, Row, Section, TextField, Toggle } from './controls'
+import { RateUs } from './rate-us'
 
 const isMac = window.api.platform === 'darwin'
 const mod = isMac ? 'Cmd' : 'Ctrl+Shift'
@@ -332,6 +334,25 @@ function Shortcuts(): React.JSX.Element {
   )
 }
 
+function ExternalLink({
+  href,
+  children
+}: {
+  href: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="text-primary text-[13px] underline-offset-4 hover:underline"
+    >
+      {children}
+    </a>
+  )
+}
+
 function About(): React.JSX.Element {
   const reset = useSettings((s) => s.reset)
   const [info, setInfo] = useState<AppInfo | null>(null)
@@ -350,22 +371,42 @@ function About(): React.JSX.Element {
         <div className="flex flex-col gap-1">
           <h2 className="font-display text-lg font-semibold tracking-tight">sdterm</h2>
           <p className="text-muted-foreground max-w-[56ch] text-sm">
-            A terminal workspace by SEM Devs: many terminals in one window, each with a name, a note
-            and a color, plus live resource monitors you can pop out.
-          </p>
-          <p className="text-muted-foreground text-xs">
-            Version {info?.version ?? '...'} ·{' '}
-            <a
-              href="https://sem-devs.com"
-              target="_blank"
-              rel="noreferrer"
-              className="text-primary underline-offset-4 hover:underline"
-            >
-              sem-devs.com
-            </a>
+            A terminal workspace by {BRAND.name}: many terminals in one window, each with a name, a
+            note and a color, plus live resource monitors you can pop out.
           </p>
         </div>
+        <dl className="grid max-w-sm grid-cols-[6rem_1fr] gap-x-4 gap-y-1 text-xs">
+          <dt className="text-muted-foreground">Version</dt>
+          <dd className="font-mono tabular-nums">{info?.version ?? '...'}</dd>
+          <dt className="text-muted-foreground">Electron</dt>
+          <dd className="font-mono tabular-nums">{info?.electron ?? '...'}</dd>
+          <dt className="text-muted-foreground">Chromium</dt>
+          <dd className="font-mono tabular-nums">{info?.chrome ?? '...'}</dd>
+        </dl>
       </section>
+
+      <RateUs />
+
+      <Section
+        title={BRAND.name}
+        description="Questions, ideas or a problem to report: write to us."
+      >
+        <Row label="Website">
+          <ExternalLink href={BRAND.website}>sem-devs.com</ExternalLink>
+        </Row>
+        <Row label="Email">
+          <ExternalLink href={`mailto:${BRAND.email}`}>{BRAND.email}</ExternalLink>
+        </Row>
+        <Row label="LinkedIn">
+          <ExternalLink href={BRAND.linkedin}>linkedin.com/company/sem-devs</ExternalLink>
+        </Row>
+        <Row label="Instagram">
+          <ExternalLink href={BRAND.instagram}>@sem.json</ExternalLink>
+        </Row>
+        <Row label="GitHub">
+          <ExternalLink href={BRAND.github}>github.com/sem-devs</ExternalLink>
+        </Row>
+      </Section>
 
       <Section title="Your data">
         <Row label="Settings file" hint={info?.storePath ?? ''}>

@@ -94,7 +94,7 @@ export function openAppWindow(
     ...(!isMac
       ? { titleBarOverlay: { color: chrome().bg, symbolColor: chrome().symbol, height: 40 } }
       : {}),
-    ...(process.platform === 'linux' ? { icon } : {}),
+    ...(!isMac ? { icon } : {}),
     webPreferences: appWebPreferences()
   })
   windows.set(id, win)
