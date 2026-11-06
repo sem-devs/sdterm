@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { IPC, type SdtermApi } from '@shared/ipc'
 import type { StoreData } from '@shared/data'
 
@@ -61,7 +61,9 @@ const api: SdtermApi = {
     info: () => ipcRenderer.invoke(IPC.appInfo),
     revealStore: () => ipcRenderer.send(IPC.appRevealStore),
     pickDirectory: () => ipcRenderer.invoke(IPC.pickDirectory),
-    openFolder: (path) => ipcRenderer.invoke(IPC.openFolder, path)
+    openFolder: (path) => ipcRenderer.invoke(IPC.openFolder, path),
+    terminalMenu: (hasSelection) => ipcRenderer.invoke(IPC.terminalMenu, hasSelection),
+    pathForFile: (file) => webUtils.getPathForFile(file)
   },
   processes: {
     subscribe: () => ipcRenderer.invoke(IPC.procSubscribe),

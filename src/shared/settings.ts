@@ -17,6 +17,8 @@ export type NetworkUnit = 'bytes' | 'bits'
 export type SampleInterval = 1000 | 2000 | 5000
 
 export interface Settings {
+  /** Bumped when a default changes in a way existing files must pick up. */
+  version: number
   appearance: {
     theme: ThemeMode
   }
@@ -56,7 +58,10 @@ export interface Settings {
   }
 }
 
+export const SETTINGS_VERSION = 2
+
 export const DEFAULT_SETTINGS: Settings = {
+  version: SETTINGS_VERSION,
   appearance: { theme: 'system' },
   window: { startMaximized: true },
   terminal: {
@@ -64,12 +69,13 @@ export const DEFAULT_SETTINGS: Settings = {
     customFontFamily: '',
     fontSize: 13,
     lineHeight: 1.25,
-    cursorStyle: 'bar',
+    cursorStyle: 'block',
     cursorBlink: false,
     scrollback: 10_000,
     shell: '',
     startDirectory: '',
-    optionAsMeta: true,
+    // Off, like Terminal.app: Option types characters (@ # [ ] on Italian and many other layouts).
+    optionAsMeta: false,
     copyOnSelect: false
   },
   workspaces: { restoreOnLaunch: true, autoColor: true },
@@ -103,7 +109,14 @@ const oneOf = <T>(value: T, allowed: readonly T[], fallback: T): T =>
   allowed.includes(value) ? value : fallback
 
 export function normalizeSettings(stored: unknown): Settings {
+  const storedVersion =
+    typeof (stored as { version?: unknown } | null)?.version === 'number'
+      ? (stored as { version: number }).version
+      : 1
   const s = merge(DEFAULT_SETTINGS, stored)
+  // v2: Option no longer acts as Meta by default (it broke typing @ and # on an Italian keyboard).
+  if (storedVersion < 2) s.terminal.optionAsMeta = false
+  s.version = SETTINGS_VERSION
   s.appearance.theme = oneOf(s.appearance.theme, ['system', 'light', 'dark'], 'system')
   s.terminal.font = oneOf(s.terminal.font, ['geist-mono', 'system', 'custom'], 'geist-mono')
   s.terminal.cursorStyle = oneOf(s.terminal.cursorStyle, ['bar', 'block', 'underline'], 'bar')

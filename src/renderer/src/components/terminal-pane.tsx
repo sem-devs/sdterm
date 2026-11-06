@@ -48,6 +48,11 @@ function folderFromOsc7(data: string): string | null {
   }
 }
 
+/** A path as one shell word: plain paths are left alone, anything else is single-quoted. */
+function shellQuote(path: string): string {
+  return /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`
+}
+
 export function TerminalPane({ paneId, focused, visible, cwd }: Props): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -113,23 +118,46 @@ export function TerminalPane({ paneId, focused, visible, cwd }: Props): React.JS
     }
     gpuRef.current(visibleRef.current)
 
-    // Windows/Linux copy and paste. On macOS the Edit menu handles Cmd+C/V.
-    if (!isMac) {
-      term.attachCustomKeyEventHandler((e) => {
-        if (e.type !== 'keydown' || !e.ctrlKey) return true
-        const key = e.key.toLowerCase()
-        if (key === 'c' && (e.shiftKey || term.hasSelection())) {
-          void navigator.clipboard.writeText(term.getSelection())
-          term.clearSelection()
-          return false
-        }
-        if (key === 'v' && e.shiftKey) {
-          void navigator.clipboard.readText().then((t) => term.paste(t))
-          return false
-        }
-        return true
-      })
+    // Keys, as the platform's own terminal behaves.
+    const send = (data: string): boolean => {
+      pty.write(paneId, data)
+      return false // handled: xterm must not process the key as well
     }
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== 'keydown') return true
+      if (isMac) {
+        // The text-editing shortcuts macOS users expect from Terminal.app.
+        if (e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey) {
+          if (e.key === 'ArrowLeft') return send('\x01') // start of line
+          if (e.key === 'ArrowRight') return send('\x05') // end of line
+          if (e.key === 'Backspace') return send('\x15') // delete to start of line
+          if (e.key === 'k') {
+            term.clear()
+            return send('\x0c') // clear, then redraw the prompt
+          }
+        }
+        if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+          if (e.key === 'ArrowLeft') return send('\x1bb') // back one word
+          if (e.key === 'ArrowRight') return send('\x1bf') // forward one word
+          if (e.key === 'Backspace') return send('\x17') // delete previous word
+          if (e.key === 'Delete') return send('\x1bd') // delete next word
+        }
+        return true // Cmd+C and Cmd+V come from the Edit menu
+      }
+      // Windows/Linux: Ctrl+Shift+C/V, and Ctrl+C copies only when text is selected.
+      if (!e.ctrlKey) return true
+      const key = e.key.toLowerCase()
+      if (key === 'c' && (e.shiftKey || term.hasSelection())) {
+        void navigator.clipboard.writeText(term.getSelection())
+        term.clearSelection()
+        return false
+      }
+      if (key === 'v' && e.shiftKey) {
+        void navigator.clipboard.readText().then((t) => term.paste(t))
+        return false
+      }
+      return true
+    })
 
     let disposed = false
     const cleanups: Array<() => void> = []
@@ -151,6 +179,40 @@ export function TerminalPane({ paneId, focused, visible, cwd }: Props): React.JS
         return true
       })
     )
+
+    // Right-click menu, like the system terminal.
+    const onContextMenu = (e: MouseEvent): void => {
+      e.preventDefault()
+      void window.api.app.terminalMenu(term.hasSelection()).then((choice) => {
+        if (choice === 'copy') void navigator.clipboard.writeText(term.getSelection())
+        if (choice === 'paste') void navigator.clipboard.readText().then((t) => term.paste(t))
+        if (choice === 'select-all') term.selectAll()
+        if (choice === 'clear') {
+          term.clear()
+          pty.write(paneId, '\x0c')
+        }
+      })
+    }
+    host.addEventListener('contextmenu', onContextMenu)
+    cleanups.push(() => host.removeEventListener('contextmenu', onContextMenu))
+
+    // Dropping files or folders types their paths, quoted for the shell.
+    const onDragOver = (e: DragEvent): void => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault()
+    }
+    const onDrop = (e: DragEvent): void => {
+      const files = [...(e.dataTransfer?.files ?? [])]
+      if (files.length === 0) return
+      e.preventDefault()
+      term.paste(files.map((f) => shellQuote(window.api.app.pathForFile(f))).join(' ') + ' ')
+      term.focus()
+    }
+    host.addEventListener('dragover', onDragOver)
+    host.addEventListener('drop', onDrop)
+    cleanups.push(() => {
+      host.removeEventListener('dragover', onDragOver)
+      host.removeEventListener('drop', onDrop)
+    })
 
     // Attach to this pane's shell: starts it, or picks up the one already running (for example
     // after the workspace moved here from another window) and repaints its recent output.

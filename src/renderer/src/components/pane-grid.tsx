@@ -1,21 +1,16 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Plus, TerminalWindow } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PaneHeader } from '@/components/pane-header'
 import { ParkedWorkspace } from '@/components/parked-workspace'
 import { TerminalPane } from '@/components/terminal-pane'
+import { PANE_MIME, computeLayout, type LayoutResult } from '@/lib/layout'
 import { cn } from '@/lib/utils'
 import { selectActive, useWorkspaces, workspacesOf, type Workspace } from '@/store/workspace'
 
 const isMac = window.api.platform === 'darwin'
 const NEW_TERMINAL_HINT = isMac ? '⌘T' : 'Ctrl+Shift+T'
-
-function gridClass(count: number): string {
-  if (count <= 1) return 'grid-cols-1'
-  if (count <= 4) return 'grid-cols-2'
-  return 'grid-cols-3'
-}
 
 function EmptyState({
   title,
@@ -43,23 +38,38 @@ function EmptyState({
 function PaneFrame({
   workspace,
   index,
-  visible
+  visible,
+  cell
 }: {
   workspace: Workspace
   index: number
   visible: boolean
+  cell: { col: string; row: string }
 }): React.JSX.Element {
   const pane = workspace.panes[index]
   const focused = workspace.activePaneId === pane.id
   const focusPane = useWorkspaces((s) => s.focusPane)
+  const swapPanes = useWorkspaces((s) => s.swapPanes)
+  const [dropping, setDropping] = useState(false)
 
   return (
     <section
-      className={cn(
-        'bg-background flex min-h-0 min-w-0 flex-col',
-        workspace.panes.length === 3 && index === 0 && 'row-span-2'
-      )}
+      className="bg-background relative flex min-h-0 min-w-0 flex-col"
+      style={{ gridColumn: cell.col, gridRow: cell.row }}
       onMouseDown={() => focusPane(pane.id)}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(PANE_MIME)) return
+        e.preventDefault() // this terminal accepts a dragged terminal
+        setDropping(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false)
+      }}
+      onDrop={(e) => {
+        setDropping(false)
+        const dragged = e.dataTransfer.getData(PANE_MIME)
+        if (dragged && dragged !== pane.id) swapPanes(dragged, pane.id)
+      }}
     >
       <PaneHeader pane={pane} index={index} focused={focused} folder={workspace.folder} />
       <div className="min-h-0 flex-1">
@@ -70,7 +80,113 @@ function PaneFrame({
           cwd={workspace.folder || undefined}
         />
       </div>
+      {dropping && (
+        <div
+          aria-hidden
+          className="ring-primary bg-primary/10 pointer-events-none absolute inset-0 z-10 ring-2 ring-inset"
+        />
+      )}
     </section>
+  )
+}
+
+/** The draggable line between the two regions of a layout. */
+function Divider({
+  workspace,
+  layout,
+  containerRef
+}: {
+  workspace: Workspace
+  layout: LayoutResult
+  containerRef: React.RefObject<HTMLDivElement | null>
+}): React.JSX.Element | null {
+  const setSplit = useWorkspaces((s) => s.setSplit)
+  if (!layout.axis) return null
+  const horizontal = layout.axis === 'x' // columns are separated by a vertical line
+
+  const start = (e: React.PointerEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    const el = e.currentTarget
+    el.setPointerCapture(e.pointerId)
+    let frame = 0
+    const move = (ev: PointerEvent): void => {
+      const box = containerRef.current?.getBoundingClientRect()
+      if (!box) return
+      const p = horizontal
+        ? (ev.clientX - box.left) / box.width
+        : (ev.clientY - box.top) / box.height
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => setSplit(workspace.id, layout.fromEnd ? 1 - p : p))
+    }
+    const end = (): void => {
+      el.releasePointerCapture(e.pointerId)
+      el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerup', end)
+      el.removeEventListener('pointercancel', end)
+    }
+    el.addEventListener('pointermove', move)
+    el.addEventListener('pointerup', end)
+    el.addEventListener('pointercancel', end)
+  }
+
+  return (
+    <div
+      role="separator"
+      aria-orientation={horizontal ? 'vertical' : 'horizontal'}
+      aria-label="Resize terminals"
+      onPointerDown={start}
+      onDoubleClick={() => setSplit(workspace.id, layout.fromEnd ? 0.4 : 0.5)}
+      className={cn(
+        'group/divider absolute z-20 flex items-center justify-center',
+        horizontal ? 'top-0 bottom-0 w-2 cursor-col-resize' : 'right-0 left-0 h-2 cursor-row-resize'
+      )}
+      style={
+        horizontal
+          ? { left: `calc(${layout.dividerAt * 100}% - 4px)` }
+          : { top: `calc(${layout.dividerAt * 100}% - 4px)` }
+      }
+    >
+      <span
+        className={cn(
+          'bg-primary/0 group-hover/divider:bg-primary/60 transition-colors',
+          horizontal ? 'h-full w-0.5' : 'h-0.5 w-full'
+        )}
+      />
+    </div>
+  )
+}
+
+function Workspaced({ ws, visible }: { ws: Workspace; visible: boolean }): React.JSX.Element {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const layout = useMemo(
+    () => computeLayout(ws.layout, ws.panes.length, ws.split),
+    [ws.layout, ws.panes.length, ws.split]
+  )
+  // Terminals stay in a fixed order in the page (by id) and are placed by their grid cell, so
+  // swapping two of them moves no DOM and never disturbs a running terminal.
+  const stable = useMemo(
+    () => ws.panes.map((p, slot) => ({ p, slot })).sort((x, y) => (x.p.id < y.p.id ? -1 : 1)),
+    [ws.panes]
+  )
+
+  return (
+    <div ref={containerRef} className="relative h-full">
+      <div
+        className="bg-border grid h-full gap-px overflow-hidden"
+        style={{ gridTemplateColumns: layout.cols, gridTemplateRows: layout.rows }}
+      >
+        {stable.map(({ p, slot }) => (
+          <PaneFrame
+            key={p.id}
+            workspace={ws}
+            index={slot}
+            visible={visible}
+            cell={layout.cells[slot]}
+          />
+        ))}
+      </div>
+      <Divider workspace={ws} layout={layout} containerRef={containerRef} />
+    </div>
   )
 }
 
@@ -107,16 +223,7 @@ export function PaneGrid({ hidden }: { hidden?: boolean }): React.JSX.Element {
                 onAction={addPane}
               />
             ) : (
-              <div
-                className={cn(
-                  'bg-border grid h-full auto-rows-fr gap-px overflow-hidden',
-                  gridClass(ws.panes.length)
-                )}
-              >
-                {ws.panes.map((p, i) => (
-                  <PaneFrame key={p.id} workspace={ws} index={i} visible={isActive && !hidden} />
-                ))}
-              </div>
+              <Workspaced ws={ws} visible={isActive && !hidden} />
             )}
           </div>
         )

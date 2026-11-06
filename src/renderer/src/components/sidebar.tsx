@@ -7,6 +7,7 @@ import { ResourcesSummary } from '@/components/resources/resources-summary'
 import { WorkspaceMenu } from '@/components/workspace-menu'
 import { cn } from '@/lib/utils'
 import { paneColorVar } from '@/lib/pane-color'
+import { PANE_MIME } from '@/lib/layout'
 import { useUi } from '@/store/ui'
 import {
   WINDOW_ID,
@@ -64,12 +65,28 @@ function WorkspaceItem({ ws, active }: { ws: Workspace; active: boolean }): Reac
   const setActive = useWorkspaces((s) => s.setActiveWorkspace)
   const focusPane = useWorkspaces((s) => s.focusPane)
   const setParked = useWorkspaces((s) => s.setParked)
+  const movePane = useWorkspaces((s) => s.movePane)
   const setView = useUi((s) => s.setView)
   const [editing, setEditing] = useState(false)
+  const [dropping, setDropping] = useState(false)
 
   return (
     <div>
-      <div className="group relative">
+      <div
+        className={cn('group relative rounded-md', dropping && 'ring-primary ring-2')}
+        // Drop a dragged terminal here to move it into this workspace.
+        onDragOver={(e) => {
+          if (ws.parked || !e.dataTransfer.types.includes(PANE_MIME)) return
+          e.preventDefault()
+          setDropping(true)
+        }}
+        onDragLeave={() => setDropping(false)}
+        onDrop={(e) => {
+          setDropping(false)
+          const dragged = e.dataTransfer.getData(PANE_MIME)
+          if (dragged) movePane(dragged, ws.id)
+        }}
+      >
         <button
           onClick={() => {
             setActive(ws.id)

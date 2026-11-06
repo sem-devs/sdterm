@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path'
 import { PANE_COLORS, DEFAULT_SETTINGS, normalizeSettings, type PaneColor } from '@shared/settings'
 import {
   APP_WINDOW_ID,
+  LAYOUTS,
+  type LayoutId,
   type PersistedWorkspaces,
   type StoreData,
   type StoreKey,
@@ -38,6 +40,8 @@ function sanitizeWorkspaces(v: unknown): PersistedWorkspaces | null {
       typeof w.windowId === 'string' && APP_WINDOW_ID.test(w.windowId) ? w.windowId : 'main',
     parked: w.parked === true,
     folder: str(w.folder, 1000),
+    layout: LAYOUTS.includes(w.layout as LayoutId) ? (w.layout as LayoutId) : 'auto',
+    split: typeof w.split === 'number' && w.split >= 0.2 && w.split <= 0.8 ? w.split : null,
     panes: (Array.isArray(w.panes) ? w.panes : []).filter(isObj).map((p) => ({
       id: str(p.id, 64, crypto.randomUUID()),
       name: str(p.name, 80),

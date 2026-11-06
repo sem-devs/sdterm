@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { paneColorVar } from '@/lib/pane-color'
+import { PANE_MIME } from '@/lib/layout'
 import { paneLabel, useWorkspaces, type Pane } from '@/store/workspace'
 
 const isMac = window.api.platform === 'darwin'
@@ -111,6 +112,13 @@ export function PaneHeader({
 
   return (
     <header
+      // Drag a terminal by its title bar onto another one to swap places, or onto a workspace in
+      // the sidebar to move it there.
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(PANE_MIME, pane.id)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
       className={cn(
         'group relative flex h-8 shrink-0 items-center pr-1 text-xs',
         focused ? 'text-foreground' : 'text-muted-foreground'

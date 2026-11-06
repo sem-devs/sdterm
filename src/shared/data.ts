@@ -9,6 +9,18 @@ export interface PersistedPane {
   color: PaneColor | null
 }
 
+/** How a workspace arranges its terminals. "auto" picks one from the number of terminals. */
+export const LAYOUTS = [
+  'auto',
+  'columns',
+  'rows',
+  'grid',
+  'main-left',
+  'main-right',
+  'main-top'
+] as const
+export type LayoutId = (typeof LAYOUTS)[number]
+
 export interface PersistedWorkspace {
   id: string
   name: string
@@ -18,6 +30,9 @@ export interface PersistedWorkspace {
   parked: boolean
   /** The project folder; new terminals in this workspace start here. */
   folder: string
+  layout: LayoutId
+  /** Size of the main area (or the first of two) as a fraction, or null for the layout's default. */
+  split: number | null
   panes: PersistedPane[]
   activePaneId: string | null
 }

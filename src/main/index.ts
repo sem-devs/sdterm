@@ -1,6 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { IPC } from '@shared/ipc'
+import { IPC, type TerminalMenuChoice } from '@shared/ipc'
 import type { AppInfo } from '@shared/data'
 import { killAllPtys, registerPtyIpc } from './pty'
 import { installMenu } from './menu'
@@ -36,6 +36,22 @@ function registerAppIpc(): void {
     return result.canceled ? null : result.filePaths[0]
   })
   ipcMain.on(IPC.windowOpen, (_e, id: string) => openAppWindow(id))
+  ipcMain.handle(IPC.terminalMenu, (event, hasSelection: boolean) => {
+    return new Promise<TerminalMenuChoice | null>((resolve) => {
+      const pick = (choice: TerminalMenuChoice) => () => resolve(choice)
+      const menu = Menu.buildFromTemplate([
+        { label: 'Copy', enabled: Boolean(hasSelection), click: pick('copy') },
+        { label: 'Paste', click: pick('paste') },
+        { type: 'separator' },
+        { label: 'Select All', click: pick('select-all') },
+        { label: 'Clear', click: pick('clear') }
+      ])
+      menu.popup({
+        window: BrowserWindow.fromWebContents(event.sender) ?? undefined,
+        callback: () => resolve(null)
+      })
+    })
+  })
 }
 
 // Windows that were open when the app last closed, main first.

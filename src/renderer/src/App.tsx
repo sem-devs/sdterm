@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { LayoutMenu } from '@/components/layout-menu'
 import { NewTerminalButton, PaneGrid } from '@/components/pane-grid'
 import { SettingsView } from '@/components/settings/settings-view'
 import { Sidebar } from '@/components/sidebar'
@@ -56,7 +57,8 @@ function App(): React.JSX.Element {
             )}
           </h1>
           {view === 'terminals' && !parked && (
-            <div className="app-no-drag">
+            <div className="app-no-drag flex items-center">
+              <LayoutMenu />
               <NewTerminalButton />
             </div>
           )}

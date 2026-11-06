@@ -1,10 +1,13 @@
 import { create } from 'zustand'
 import { DEFAULT_SETTINGS, type Settings } from '@shared/settings'
 
+// Every settings group, i.e. everything except the file's version number.
+type Section = Exclude<keyof Settings, 'version'>
+
 interface SettingsState {
   settings: Settings
   /** Sets one value, e.g. set('terminal', 'fontSize', 14). Saved to disk by the main process. */
-  set: <S extends keyof Settings, K extends keyof Settings[S]>(
+  set: <S extends Section, K extends keyof Settings[S]>(
     section: S,
     key: K,
     value: Settings[S][K]

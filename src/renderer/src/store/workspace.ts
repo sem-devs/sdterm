@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { PANE_COLORS, type PaneColor } from '@shared/settings'
-import type { PersistedWorkspaces } from '@shared/data'
+import type { LayoutId, PersistedWorkspaces } from '@shared/data'
 import { useSettings } from '@/store/settings'
 
 /** Which app window this renderer is: "main", or "w2", "w3"... for extra windows. */
@@ -24,6 +24,8 @@ export interface Workspace {
   parked: boolean
   /** Project folder; new terminals start here. */
   folder: string
+  layout: LayoutId
+  split: number | null
   panes: Pane[]
   activePaneId: string | null
 }
@@ -37,6 +39,12 @@ interface WorkspaceState {
   setActiveWorkspace: (id: string) => void
   setFolder: (id: string, folder: string) => void
   setParked: (id: string, parked: boolean) => void
+  setLayout: (id: string, layout: LayoutId) => void
+  setSplit: (id: string, split: number) => void
+  /** Swaps two terminals' places (drag one onto another). */
+  swapPanes: (a: string, b: string) => void
+  /** Moves a terminal to the end of another workspace. */
+  movePane: (paneId: string, workspaceId: string) => void
   moveWorkspace: (id: string, windowId: string) => void
   deleteWorkspace: (id: string) => void
   addPane: () => void
@@ -82,6 +90,8 @@ function newWorkspace(n: number, windowId: string): Workspace {
     windowId,
     parked: false,
     folder: '',
+    layout: 'auto',
+    split: null,
     panes: [pane],
     activePaneId: pane.id
   }
@@ -146,6 +156,53 @@ export const useWorkspaces = create<WorkspaceState>((set, get) => ({
 
   setParked: (id, parked) =>
     set((s) => ({ workspaces: mapWorkspace(s.workspaces, id, (w) => ({ ...w, parked })) })),
+
+  setLayout: (id, layout) =>
+    set((s) => ({
+      workspaces: mapWorkspace(s.workspaces, id, (w) => ({ ...w, layout, split: null }))
+    })),
+
+  setSplit: (id, split) =>
+    set((s) => ({
+      workspaces: mapWorkspace(s.workspaces, id, (w) => ({
+        ...w,
+        split: Math.min(0.8, Math.max(0.2, split))
+      }))
+    })),
+
+  swapPanes: (a, b) =>
+    set((s) => ({
+      workspaces: s.workspaces.map((w) => {
+        const i = w.panes.findIndex((p) => p.id === a)
+        const j = w.panes.findIndex((p) => p.id === b)
+        if (i < 0 || j < 0 || i === j) return w
+        const panes = [...w.panes]
+        ;[panes[i], panes[j]] = [panes[j], panes[i]]
+        return { ...w, panes }
+      })
+    })),
+
+  movePane: (paneId, workspaceId) =>
+    set((s) => {
+      const from = s.workspaces.find((w) => w.panes.some((p) => p.id === paneId))
+      const to = s.workspaces.find((w) => w.id === workspaceId)
+      if (!from || !to || from.id === to.id || to.parked) return s
+      const pane = from.panes.find((p) => p.id === paneId)!
+      return {
+        workspaces: s.workspaces.map((w) => {
+          if (w.id === from.id) {
+            const panes = w.panes.filter((p) => p.id !== paneId)
+            return {
+              ...w,
+              panes,
+              activePaneId: w.activePaneId === paneId ? (panes[0]?.id ?? null) : w.activePaneId
+            }
+          }
+          if (w.id === to.id) return { ...w, panes: [...w.panes, pane], activePaneId: pane.id }
+          return w
+        })
+      }
+    }),
 
   moveWorkspace: (id, windowId) => {
     const ws = get().workspaces.find((w) => w.id === id)
@@ -253,6 +310,8 @@ function serialize(): PersistedWorkspaces {
       windowId: w.windowId,
       parked: w.parked,
       folder: w.folder,
+      layout: w.layout,
+      split: w.split,
       activePaneId: w.activePaneId,
       panes: w.panes.map(({ id, name, note, color }) => ({ id, name, note, color }))
     }))

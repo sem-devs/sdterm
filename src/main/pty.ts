@@ -54,6 +54,43 @@ function configuredShell(custom?: string): { file: string; args: string[] } | nu
   return { file, args: process.platform === 'win32' ? [] : ['-l'] }
 }
 
+// Variables that describe the process that launched sdterm, not the user's terminal. They must not
+// leak into shells: a Claude Code started inside a terminal would think it is a child of another
+// session (and so skip saving transcripts), and npm/Electron variables confuse project tooling.
+const LAUNCHER_VARS =
+  /^(CLAUDECODE|CLAUDE_PID|CLAUDE_EFFORT|INIT_CWD|CLAUDE_CODE_(CHILD_SESSION|ENTRYPOINT|EXECPATH|SESSION_.*|MESSAGING_.*)|npm_.*|ELECTRON_.*)$/
+
+// Terminal.app always starts shells with a UTF-8 locale. An app opened from Finder has none, and
+// without it accented characters and emoji come out as garbage in the shell.
+function defaultLang(): string {
+  if (process.platform !== 'darwin') return 'C.UTF-8'
+  const [lang, region] = app.getLocale().split('-')
+  const regions: Record<string, string> = {
+    en: 'US',
+    it: 'IT',
+    de: 'DE',
+    fr: 'FR',
+    es: 'ES',
+    pt: 'PT'
+  }
+  return `${lang}_${region ?? regions[lang] ?? lang.toUpperCase()}.UTF-8`
+}
+
+function shellEnvironment(): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && !LAUNCHER_VARS.test(key)) env[key] = value
+  }
+  if (!env.LANG && !env.LC_ALL) env.LANG = defaultLang()
+  return {
+    ...env,
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    TERM_PROGRAM: 'sdterm',
+    TERM_PROGRAM_VERSION: app.getVersion()
+  }
+}
+
 const clampSize = (n: number, fallback: number): number =>
   Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 1000) : fallback
 
@@ -210,12 +247,7 @@ export function registerPtyIpc(): void {
         cols: clampSize(opts.cols, 80),
         rows: clampSize(opts.rows, 24),
         cwd,
-        env: {
-          ...process.env,
-          TERM: 'xterm-256color',
-          COLORTERM: 'truecolor',
-          TERM_PROGRAM: 'sdterm'
-        } as Record<string, string>
+        env: shellEnvironment()
       })
 
     // A typo in the shell setting must not leave the user without any terminal.

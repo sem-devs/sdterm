@@ -185,7 +185,7 @@ function Terminal(): React.JSX.Element {
         {isMac && (
           <Row
             label="Option key as Meta"
-            hint="Lets Option act as Alt in shells and editors (word jumps, vim)."
+            hint="Off by default, like Terminal.app, so Option types characters such as @ # [ ] on Italian and other layouts. Turn it on if you use Option as Alt in vim or emacs."
             htmlFor="meta"
           >
             <Toggle

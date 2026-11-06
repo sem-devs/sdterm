@@ -39,8 +39,11 @@ export const IPC = {
   procSubscribe: 'processes:subscribe',
   procUnsubscribe: 'processes:unsubscribe',
   procSample: 'processes:sample',
-  openFolder: 'app:open-folder'
+  openFolder: 'app:open-folder',
+  terminalMenu: 'app:terminal-menu'
 } as const
+
+export type TerminalMenuChoice = 'copy' | 'paste' | 'select-all' | 'clear'
 
 export type AppCommand = 'new-pane' | 'close-pane' | 'new-workspace' | 'open-settings'
 
@@ -121,6 +124,10 @@ export interface SdtermApi {
     pickDirectory: () => Promise<string | null>
     /** Shows a folder in Finder (macOS) or Explorer (Windows). Resolves to an error message, or "". */
     openFolder: (path: string) => Promise<string>
+    /** Right-click menu of a terminal. Resolves to what was chosen, or null. */
+    terminalMenu: (hasSelection: boolean) => Promise<TerminalMenuChoice | null>
+    /** Filesystem path of a file dropped onto the window. */
+    pathForFile: (file: File) => string
   }
   processes: {
     subscribe: () => Promise<ProcessSnapshot | null>
