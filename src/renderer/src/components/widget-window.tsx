@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { BrandMark } from '@/components/brand-logo'
 import { MetricPanel } from '@/components/resources/metric-panel'
+import { ProcessesPanel } from '@/components/processes-panel'
 import { WIDGET_METRICS } from '@/components/resources/metrics'
+import { useProcessFeed } from '@/store/processes'
 import { useResourceFeed } from '@/store/resources'
 import { useSettings } from '@/store/settings'
 
@@ -45,7 +47,9 @@ function ResizeGrip(): React.JSX.Element {
 
 /** Content of a popped-out resources window. Frameless, so it draws its own title bar. */
 export function WidgetWindow({ kind }: { kind: WidgetKind }): React.JSX.Element {
-  useResourceFeed()
+  const isProcesses = kind === 'processes'
+  useResourceFeed(!isProcesses)
+  useProcessFeed(isProcesses)
   const [pinned, setPinned] = useState(
     () => useSettings.getState().settings.resources.popoutAlwaysOnTop
   )
@@ -112,11 +116,15 @@ export function WidgetWindow({ kind }: { kind: WidgetKind }): React.JSX.Element 
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto">
-        {metrics.map((id) => (
-          <MetricPanel key={id} id={id} className={metrics.length === 1 ? 'flex-1' : undefined} />
-        ))}
-      </div>
+      {isProcesses ? (
+        <ProcessesPanel />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto">
+          {metrics.map((id) => (
+            <MetricPanel key={id} id={id} className={metrics.length === 1 ? 'flex-1' : undefined} />
+          ))}
+        </div>
+      )}
       <ResizeGrip />
     </div>
   )

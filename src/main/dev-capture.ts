@@ -13,7 +13,7 @@ import { openWidget } from './widgets'
  *   SDTERM_USER_DATA     separate userData dir, so captures never touch real settings
  *   SDTERM_OPEN_WIDGETS  comma separated widget kinds, e.g. "cpu,net"
  *   SDTERM_EVAL          JS run in the main window before capturing
- *   SDTERM_EVAL_TARGET     "widget" runs the snippet in the first pop-out instead of the main window
+ *   SDTERM_EVAL_TARGET     "widget" or "window:w2": run the snippet there instead of in main
  *   SDTERM_EVAL_DELAY    ms to wait after the snippet (default 700)
  *   SDTERM_CAPTURE_DELAY ms after load before the first step (default 4500)
  */
@@ -31,10 +31,17 @@ export function runDevCapture(main: BrowserWindow): void {
       const code = process.env.SDTERM_EVAL
       if (code) {
         try {
+          // "widget" = first pop-out; "window:w2" = that app window; default = main.
+          const spec = process.env.SDTERM_EVAL_TARGET ?? ''
           const target =
-            process.env.SDTERM_EVAL_TARGET === 'widget'
-              ? (BrowserWindow.getAllWindows().find((w) => w !== main) ?? main)
-              : main
+            (spec &&
+              BrowserWindow.getAllWindows().find((w) => {
+                const url = w.webContents.getURL()
+                return spec === 'widget'
+                  ? url.includes('widget=')
+                  : url.includes(`window=${spec.slice(7)}`)
+              })) ||
+            main
           const result: unknown = await target.webContents.executeJavaScript(code)
           if (result !== undefined) console.log('[capture] eval =>', JSON.stringify(result))
         } catch (err) {
@@ -44,7 +51,12 @@ export function runDevCapture(main: BrowserWindow): void {
       }
       for (const win of BrowserWindow.getAllWindows()) {
         const url = win.webContents.getURL()
-        const name = /widget=([\w-]+)/.exec(url)?.[1] ?? 'main'
+        const name =
+          /widget=([\w-]+)/.exec(url)?.[1] ?? `window-${/window=(\w+)/.exec(url)?.[1] ?? 'main'}`
+        // A window behind others may not repaint, so bring it forward first.
+        win.show()
+        win.focus()
+        await new Promise((r) => setTimeout(r, 500))
         const image = await win.webContents.capturePage()
         writeFileSync(join(dir, `${name}.png`), image.toPNG())
         console.log(`[capture] ${name}`)

@@ -12,14 +12,23 @@ export interface PersistedPane {
 export interface PersistedWorkspace {
   id: string
   name: string
+  /** Which app window shows it: "main", "w2", "w3", ... */
+  windowId: string
+  /** Parked: its shells are stopped, but names, notes, colors and folders are kept. */
+  parked: boolean
+  /** The project folder; new terminals in this workspace start here. */
+  folder: string
   panes: PersistedPane[]
   activePaneId: string | null
 }
 
 export interface PersistedWorkspaces {
   workspaces: PersistedWorkspace[]
-  activeWorkspaceId: string
+  /** The selected workspace in each window. */
+  activeByWindow: Record<string, string>
 }
+
+export const APP_WINDOW_ID = /^(main|w\d{1,2})$/
 
 export interface WidgetBounds {
   x: number
@@ -28,7 +37,7 @@ export interface WidgetBounds {
   height: number
 }
 
-export type WidgetKind = 'summary' | 'cpu' | 'cpu-ram' | 'ram' | 'disk' | 'net'
+export type WidgetKind = 'summary' | 'cpu' | 'cpu-ram' | 'ram' | 'disk' | 'net' | 'processes'
 
 export const WIDGET_DEFS: Record<
   WidgetKind,
@@ -39,7 +48,8 @@ export const WIDGET_DEFS: Record<
   'cpu-ram': { label: 'CPU and RAM', width: 320, height: 210, minHeight: 170 },
   ram: { label: 'RAM', width: 320, height: 190, minHeight: 150 },
   disk: { label: 'Disk I/O', width: 320, height: 210, minHeight: 170 },
-  net: { label: 'Network I/O', width: 320, height: 210, minHeight: 170 }
+  net: { label: 'Network I/O', width: 320, height: 210, minHeight: 170 },
+  processes: { label: 'Processes', width: 480, height: 560, minHeight: 280 }
 }
 
 export const WIDGET_KINDS = Object.keys(WIDGET_DEFS) as WidgetKind[]
@@ -48,6 +58,9 @@ export interface StoreData {
   settings: Settings
   workspaces: PersistedWorkspaces | null
   widgetBounds: Partial<Record<WidgetKind, WidgetBounds>>
+  /** Last known folder of each terminal's shell. Written only by the main process. */
+  paneCwds: Record<string, string>
+  windowBounds: Record<string, WidgetBounds>
 }
 
 export type StoreKey = keyof StoreData
@@ -64,6 +77,22 @@ export interface ResourceSample {
   diskWrite: number | null
   netDown: number | null
   netUp: number | null
+}
+
+export interface ProcessInfo {
+  pid: number
+  name: string
+  /** Percent of one core, like Activity Monitor and Task Manager (can exceed 100). */
+  cpu: number
+  /** Resident memory in bytes. */
+  rss: number
+}
+
+export interface ProcessSnapshot {
+  t: number
+  cores: number
+  memTotal: number
+  list: ProcessInfo[]
 }
 
 export interface AppInfo {

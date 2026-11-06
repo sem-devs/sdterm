@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type IDisposable } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -16,11 +16,15 @@ const isMac = window.api.platform === 'darwin'
 interface Props {
   paneId: string
   focused: boolean
+  /** Only visible terminals use the GPU renderer: browsers allow few WebGL contexts. */
+  visible: boolean
+  /** Where a brand new shell starts (the workspace's project folder), if known. */
+  cwd?: string
 }
 
 type TerminalSettings = Settings['terminal']
 
-function applySettings(term: Terminal, fit: FitAddon, t: TerminalSettings): void {
+function applySettings(term: Terminal, refit: () => void, t: TerminalSettings): void {
   term.options.fontFamily = terminalFontFamily(t)
   term.options.fontSize = t.fontSize
   term.options.lineHeight = t.lineHeight
@@ -28,12 +32,34 @@ function applySettings(term: Terminal, fit: FitAddon, t: TerminalSettings): void
   term.options.cursorBlink = t.cursorBlink
   term.options.scrollback = t.scrollback
   term.options.macOptionIsMeta = t.optionAsMeta
-  fit.fit() // cell size changed
+  refit() // cell size changed
 }
 
-export function TerminalPane({ paneId, focused }: Props): React.JSX.Element {
+// Shells that know about it announce their folder: OSC 7 (file://host/path), and OSC 9;9 as
+// used by Windows Terminal and prompts like oh-my-posh and starship.
+function folderFromOsc7(data: string): string | null {
+  try {
+    const url = new URL(data)
+    if (url.protocol !== 'file:') return null
+    const path = decodeURIComponent(url.pathname)
+    return /^\/[A-Za-z]:/.test(path) ? path.slice(1) : path
+  } catch {
+    return null
+  }
+}
+
+export function TerminalPane({ paneId, focused, visible, cwd }: Props): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
+  const gpuRef = useRef<((on: boolean) => void) | null>(null)
+  const visibleRef = useRef(visible)
+  const cwdRef = useRef(cwd)
+
+  // Declared before the main effect, so the refs are current when the terminal is created.
+  useEffect(() => {
+    visibleRef.current = visible
+    cwdRef.current = cwd
+  })
 
   useEffect(() => {
     const host = hostRef.current!
@@ -55,15 +81,36 @@ export function TerminalPane({ paneId, focused }: Props): React.JSX.Element {
     term.loadAddon(fit)
     term.loadAddon(new WebLinksAddon())
     term.open(host)
-    try {
-      const webgl = new WebglAddon()
-      webgl.onContextLoss(() => webgl.dispose())
-      term.loadAddon(webgl)
-    } catch {
-      // WebGL unavailable: xterm falls back to the DOM renderer
+    // A hidden terminal (a workspace in the background) has no size. Fitting it would shrink the
+    // shell to a handful of columns, so the prompt wraps and output is laid out for 9 columns.
+    const hasSize = (): boolean => host.clientWidth > 80 && host.clientHeight > 40
+    const refit = (): void => {
+      if (hasSize()) fit.fit()
     }
-    fit.fit()
+    refit()
+    if (!hasSize()) term.resize(120, 32) // a sane size to start the shell at until it is shown
     termRef.current = term
+
+    let webgl: WebglAddon | null = null
+    gpuRef.current = (on: boolean): void => {
+      if (on && !webgl) {
+        try {
+          const addon = new WebglAddon()
+          addon.onContextLoss(() => {
+            addon.dispose()
+            if (webgl === addon) webgl = null
+          })
+          term.loadAddon(addon)
+          webgl = addon
+        } catch {
+          // WebGL unavailable: xterm keeps its DOM renderer
+        }
+      } else if (!on && webgl) {
+        webgl.dispose()
+        webgl = null
+      }
+    }
+    gpuRef.current(visibleRef.current)
 
     // Windows/Linux copy and paste. On macOS the Edit menu handles Cmd+C/V.
     if (!isMac) {
@@ -83,59 +130,78 @@ export function TerminalPane({ paneId, focused }: Props): React.JSX.Element {
       })
     }
 
-    let ptyId: string | null = null
     let disposed = false
     const cleanups: Array<() => void> = []
+    const own = (d: IDisposable): void => {
+      cleanups.push(() => d.dispose())
+    }
 
-    pty
-      .create({
+    own(
+      term.parser.registerOscHandler(7, (data) => {
+        const dir = folderFromOsc7(data)
+        if (dir) pty.reportCwd(paneId, dir)
+        return true
+      })
+    )
+    own(
+      term.parser.registerOscHandler(9, (data) => {
+        if (!data.startsWith('9;')) return false // other OSC 9 uses (notifications)
+        pty.reportCwd(paneId, data.slice(2).replace(/^"|"$/g, ''))
+        return true
+      })
+    )
+
+    // Attach to this pane's shell: starts it, or picks up the one already running (for example
+    // after the workspace moved here from another window) and repaints its recent output.
+    void pty
+      .attach({
+        paneId,
         cols: term.cols,
         rows: term.rows,
         shell: cfg.shell || undefined,
-        cwd: cfg.startDirectory || undefined
+        cwd: cwdRef.current || cfg.startDirectory || undefined
       })
-      .then(({ id }) => {
+      .then(({ replay }) => {
         if (disposed) {
-          pty.kill(id)
+          pty.detach(paneId)
           return
         }
-        ptyId = id
+        if (replay) term.write(replay)
         cleanups.push(
-          pty.onData((pid, data) => pid === id && term.write(data)),
-          pty.onExit((pid) => pid === id && useWorkspaces.getState().closePane(paneId)),
-          term.onData((data) => pty.write(id, data)).dispose,
-          term.onResize(({ cols, rows }) => pty.resize(id, cols, rows)).dispose,
-          term.onTitleChange((title) => useWorkspaces.getState().setAutoTitle(paneId, title))
-            .dispose
+          pty.onData(paneId, (data) => term.write(data)),
+          pty.onExit(paneId, () => useWorkspaces.getState().closePane(paneId))
         )
-        // The pane may have been resized while the shell was starting.
-        pty.resize(id, term.cols, term.rows)
+        own(term.onData((data) => pty.write(paneId, data)))
+        own(term.onResize(({ cols, rows }) => pty.resize(paneId, cols, rows)))
+        own(term.onTitleChange((title) => useWorkspaces.getState().setAutoTitle(paneId, title)))
+        // The view may have a different size than the shell had.
+        pty.resize(paneId, term.cols, term.rows)
       })
 
-    cleanups.push(
+    own(
       term.onSelectionChange(() => {
         if (useSettings.getState().settings.terminal.copyOnSelect && term.hasSelection()) {
           void navigator.clipboard.writeText(term.getSelection())
         }
-      }).dispose
+      })
     )
 
     let raf = 0
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => fit.fit())
+      raf = requestAnimationFrame(refit)
     })
     observer.observe(host)
 
     // Cell size depends on the font, so re-measure once the bundled font has actually loaded.
     void document.fonts.load(`${cfg.fontSize}px "Geist Mono Variable"`).then(() => {
-      if (!disposed) applySettings(term, fit, useSettings.getState().settings.terminal)
+      if (!disposed) applySettings(term, refit, useSettings.getState().settings.terminal)
     })
 
     // Settings changes apply to live terminals immediately.
     const offSettings = useSettings.subscribe((state, prev) => {
       if (state.settings.terminal !== prev.settings.terminal) {
-        applySettings(term, fit, state.settings.terminal)
+        applySettings(term, refit, state.settings.terminal)
       }
     })
 
@@ -150,15 +216,23 @@ export function TerminalPane({ paneId, focused }: Props): React.JSX.Element {
       offSettings()
       offTheme()
       cleanups.forEach((fn) => fn())
-      if (ptyId) pty.kill(ptyId)
+      // Detach, do not kill: the shell belongs to the pane, not to this view. It is ended only
+      // when the terminal is closed or its workspace is parked or deleted.
+      pty.detach(paneId)
+      gpuRef.current?.(false)
+      gpuRef.current = null
       term.dispose()
       termRef.current = null
     }
   }, [paneId])
 
   useEffect(() => {
-    if (focused) termRef.current?.focus()
-  }, [focused])
+    gpuRef.current?.(visible)
+  }, [visible])
+
+  useEffect(() => {
+    if (focused && visible) termRef.current?.focus()
+  }, [focused, visible])
 
   return <div ref={hostRef} className="h-full min-h-0 w-full min-w-0 overflow-hidden" />
 }

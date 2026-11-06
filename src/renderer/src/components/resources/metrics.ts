@@ -101,5 +101,6 @@ export const WIDGET_METRICS: Record<WidgetKind, MetricId[]> = {
   ram: ['ram'],
   'cpu-ram': ['cpu-ram'],
   disk: ['disk'],
-  net: ['net']
+  net: ['net'],
+  processes: [] // its own table, not charts
 }

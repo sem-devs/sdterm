@@ -2,10 +2,23 @@ import { app, ipcMain, shell, BrowserWindow, type WebContents } from 'electron'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { PANE_COLORS, DEFAULT_SETTINGS, normalizeSettings, type PaneColor } from '@shared/settings'
-import type { PersistedWorkspaces, StoreData, StoreKey, WidgetBounds } from '@shared/data'
+import {
+  APP_WINDOW_ID,
+  type PersistedWorkspaces,
+  type StoreData,
+  type StoreKey,
+  type WidgetBounds
+} from '@shared/data'
 import { IPC } from '@shared/ipc'
 
-let data: StoreData = { settings: DEFAULT_SETTINGS, workspaces: null, widgetBounds: {} }
+const EMPTY: Omit<StoreData, 'settings'> = {
+  workspaces: null,
+  widgetBounds: {},
+  paneCwds: {},
+  windowBounds: {}
+}
+
+let data: StoreData = { settings: DEFAULT_SETTINGS, ...EMPTY }
 let file = ''
 let timer: NodeJS.Timeout | null = null
 let dirty = false
@@ -21,6 +34,10 @@ function sanitizeWorkspaces(v: unknown): PersistedWorkspaces | null {
   const workspaces = v.workspaces.filter(isObj).map((w) => ({
     id: str(w.id, 64, crypto.randomUUID()),
     name: str(w.name, 80, 'Workspace'),
+    windowId:
+      typeof w.windowId === 'string' && APP_WINDOW_ID.test(w.windowId) ? w.windowId : 'main',
+    parked: w.parked === true,
+    folder: str(w.folder, 1000),
     panes: (Array.isArray(w.panes) ? w.panes : []).filter(isObj).map((p) => ({
       id: str(p.id, 64, crypto.randomUUID()),
       name: str(p.name, 80),
@@ -30,21 +47,37 @@ function sanitizeWorkspaces(v: unknown): PersistedWorkspaces | null {
     activePaneId: typeof w.activePaneId === 'string' ? w.activePaneId : null
   }))
   if (workspaces.length === 0) return null
-  const active = typeof v.activeWorkspaceId === 'string' ? v.activeWorkspaceId : ''
-  return {
-    workspaces,
-    activeWorkspaceId: workspaces.some((w) => w.id === active) ? active : workspaces[0].id
+
+  const activeByWindow: Record<string, string> = {}
+  const rawActive = isObj(v.activeByWindow) ? v.activeByWindow : {}
+  for (const [win, id] of Object.entries(rawActive)) {
+    if (workspaces.some((w) => w.id === id && w.windowId === win))
+      activeByWindow[win] = id as string
   }
+  // Files from before windows existed had a single active workspace.
+  const legacy = v.activeWorkspaceId
+  if (!activeByWindow.main && workspaces.some((w) => w.id === legacy && w.windowId === 'main')) {
+    activeByWindow.main = legacy as string
+  }
+  return { workspaces, activeByWindow }
 }
 
-function sanitizeBounds(v: unknown): StoreData['widgetBounds'] {
-  const out: StoreData['widgetBounds'] = {}
+function sanitizeStringMap(v: unknown, max: number): Record<string, string> {
+  const out: Record<string, string> = {}
   if (!isObj(v)) return out
-  for (const [kind, b] of Object.entries(v)) {
+  for (const [k, val] of Object.entries(v))
+    if (typeof val === 'string') out[k.slice(0, 64)] = val.slice(0, max)
+  return out
+}
+
+function sanitizeBounds(v: unknown): Record<string, WidgetBounds> {
+  const out: Record<string, WidgetBounds> = {}
+  if (!isObj(v)) return out
+  for (const [key, b] of Object.entries(v)) {
     if (!isObj(b)) continue
     const { x, y, width, height } = b
     if ([x, y, width, height].every((n) => typeof n === 'number' && Number.isFinite(n))) {
-      out[kind as keyof StoreData['widgetBounds']] = { x, y, width, height } as WidgetBounds
+      out[key] = { x, y, width, height } as WidgetBounds
     }
   }
   return out
@@ -58,12 +91,14 @@ export function initStore(): void {
     data = {
       settings: normalizeSettings(o.settings),
       workspaces: sanitizeWorkspaces(o.workspaces),
-      widgetBounds: sanitizeBounds(o.widgetBounds)
+      widgetBounds: sanitizeBounds(o.widgetBounds),
+      paneCwds: sanitizeStringMap(o.paneCwds, 1000),
+      windowBounds: sanitizeBounds(o.windowBounds)
     }
   } catch {
     // First run, or an unreadable file: start from defaults. The bad file is overwritten
     // on the next save.
-    data = { settings: DEFAULT_SETTINGS, workspaces: null, widgetBounds: {} }
+    data = { settings: DEFAULT_SETTINGS, ...EMPTY }
   }
 }
 
@@ -111,6 +146,22 @@ export function setStoreValue<K extends StoreKey>(
   listeners.get(key)?.forEach((cb) => cb(value))
 }
 
+/** For values only the main process writes: saved to disk, but not broadcast to any window. */
+export function setStoreSilently<K extends StoreKey>(key: K, value: StoreData[K]): void {
+  data = { ...data, [key]: value }
+  dirty = true
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(writeNow, 300)
+}
+
+// Folders of terminals that no longer exist are dropped.
+function pruneCwds(): void {
+  const ids = new Set(data.workspaces?.workspaces.flatMap((w) => w.panes.map((p) => p.id)))
+  const kept = Object.fromEntries(Object.entries(data.paneCwds).filter(([id]) => ids.has(id)))
+  if (Object.keys(kept).length !== Object.keys(data.paneCwds).length)
+    setStoreSilently('paneCwds', kept)
+}
+
 export function registerStoreIpc(): void {
   // Synchronous on purpose: it runs once per window before the first paint.
   ipcMain.on(IPC.storeLoad, (event) => {
@@ -121,6 +172,7 @@ export function registerStoreIpc(): void {
     if (key === 'settings') setStoreValue('settings', normalizeSettings(value), event.sender)
     else if (key === 'workspaces') {
       setStoreValue('workspaces', value === null ? null : sanitizeWorkspaces(value), event.sender)
+      pruneCwds()
     }
     // widgetBounds is owned by the main process.
   })

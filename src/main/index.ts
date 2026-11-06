@@ -1,6 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
 import { IPC } from '@shared/ipc'
 import type { AppInfo } from '@shared/data'
 import { killAllPtys, registerPtyIpc } from './pty'
@@ -14,60 +13,14 @@ import {
   storePath
 } from './store'
 import { registerResourcesIpc, setSampleInterval } from './resources'
-import { closeAllWidgets, registerWidgetIpc } from './widgets'
-import { appWebPreferences, chrome, hardenWindow, isMac, loadRenderer, syncChrome } from './window'
+import { registerProcessesIpc } from './processes'
+import { registerWidgetIpc } from './widgets'
+import { getAppWindows, markQuitting, openAppWindow } from './windows'
+import { isMac, syncChrome } from './window'
 import { runDevCapture } from './dev-capture'
 
 if (!app.isPackaged && process.env.SDTERM_USER_DATA) {
   app.setPath('userData', process.env.SDTERM_USER_DATA)
-}
-
-let mainWindow: BrowserWindow | null = null
-
-function createWindow(): void {
-  const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 760,
-    minHeight: 480,
-    show: false,
-    autoHideMenuBar: true,
-    backgroundColor: chrome().bg,
-    // Custom title bar: native traffic lights on macOS, native controls overlay on Windows.
-    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
-    ...(isMac ? { trafficLightPosition: { x: 14, y: 13 } } : {}),
-    ...(!isMac
-      ? { titleBarOverlay: { color: chrome().bg, symbolColor: chrome().symbol, height: 40 } }
-      : {}),
-    ...(process.platform === 'linux' ? { icon } : {}),
-    webPreferences: appWebPreferences()
-  })
-  mainWindow = win
-
-  hardenWindow(win)
-  const startMaximized = getStore().settings.window.startMaximized
-  win.on('ready-to-show', () => {
-    // Screen-sized but still a normal window: no full-screen Space, resizable, and the
-    // green/maximize button toggles back to the previous size.
-    if (startMaximized) win.maximize()
-    win.show()
-  })
-  // Pop-out widgets belong to the session: they go away with the main window.
-  win.on('closed', () => {
-    mainWindow = null
-    closeAllWidgets()
-  })
-
-  if (is.dev) {
-    win.webContents.on('console-message', (event) => {
-      if (event.level === 'error' || event.level === 'warning') {
-        console.log(`[renderer ${event.level}] ${event.message}`)
-      }
-    })
-  }
-
-  loadRenderer(win)
-  runDevCapture(win)
 }
 
 function registerAppIpc(): void {
@@ -82,6 +35,14 @@ function registerAppIpc(): void {
     const result = await dialog.showOpenDialog(win!, { properties: ['openDirectory'] })
     return result.canceled ? null : result.filePaths[0]
   })
+  ipcMain.on(IPC.windowOpen, (_e, id: string) => openAppWindow(id))
+}
+
+// Windows that were open when the app last closed, main first.
+function windowIdsToRestore(): string[] {
+  const ids = new Set<string>(['main'])
+  for (const w of getStore().workspaces?.workspaces ?? []) ids.add(w.windowId)
+  return [...ids]
 }
 
 app.whenReady().then(() => {
@@ -97,6 +58,7 @@ app.whenReady().then(() => {
   registerStoreIpc()
   registerPtyIpc()
   registerResourcesIpc()
+  registerProcessesIpc()
   registerWidgetIpc()
   registerAppIpc()
 
@@ -108,7 +70,7 @@ app.whenReady().then(() => {
   applySettings()
   onStoreChange('settings', (s) => applySettings(s))
   nativeTheme.on('updated', () => {
-    for (const win of BrowserWindow.getAllWindows()) syncChrome(win, win === mainWindow)
+    for (const win of BrowserWindow.getAllWindows()) syncChrome(win, getAppWindows().includes(win))
   })
 
   app.on('browser-window-created', (_, window) => {
@@ -116,16 +78,28 @@ app.whenReady().then(() => {
   })
 
   installMenu(is.dev)
-  createWindow()
+
+  const restored = getStore().settings.workspaces.restoreOnLaunch
+  const main = openAppWindow('main')
+  if (restored) for (const id of windowIdsToRestore()) if (id !== 'main') openAppWindow(id)
+  if (main) runDevCapture(main)
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (!getAppWindows().some((w) => !w.isDestroyed())) openAppWindow('main')
   })
 })
 
-app.on('before-quit', () => {
-  killAllPtys()
-  flushStore()
+let shellsStopped = false
+app.on('before-quit', (event) => {
+  markQuitting()
+  if (shellsStopped) return
+  // Hold the quit until the shells have really exited, then quit again.
+  event.preventDefault()
+  shellsStopped = true
+  void killAllPtys().then(() => {
+    flushStore()
+    app.quit()
+  })
 })
 
 app.on('window-all-closed', () => {

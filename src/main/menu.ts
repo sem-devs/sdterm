@@ -1,17 +1,14 @@
-import { app, BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron'
+import { app, Menu, type MenuItemConstructorOptions } from 'electron'
 import { WIDGET_DEFS, WIDGET_KINDS } from '@shared/data'
 import { IPC, type AppCommand } from '@shared/ipc'
 import { openWidget } from './widgets'
+import { getFocusedAppWindow, nextWindowId, openAppWindow } from './windows'
 
 const isMac = process.platform === 'darwin'
 
 function send(cmd: AppCommand): void {
-  const win = BrowserWindow.getAllWindows().find((w) => w.isFocused() && !w.isDestroyed())
-  // Widget windows have no workspace to act on, so commands go to the main window.
-  const target = BrowserWindow.getAllWindows().find(
-    (w) => !w.webContents.getURL().includes('widget=')
-  )
-  ;(target ?? win)?.webContents.send(IPC.appCommand, cmd)
+  // Commands act on the app window you are in; widget windows have no workspace.
+  getFocusedAppWindow()?.webContents.send(IPC.appCommand, cmd)
 }
 
 export function installMenu(isDev: boolean): void {
@@ -47,6 +44,10 @@ export function installMenu(isDev: boolean): void {
       { label: 'Close Terminal', accelerator: `${mod}+W`, click: () => send('close-pane') },
       { type: 'separator' },
       { label: 'New Workspace', accelerator: `${mod}+N`, click: () => send('new-workspace') },
+      {
+        label: 'New Window',
+        click: () => openAppWindow(nextWindowId(), { newWorkspace: true })
+      },
       ...(isMac ? [] : ([{ type: 'separator' }, settingsItem] as MenuItemConstructorOptions[]))
     ]
   }

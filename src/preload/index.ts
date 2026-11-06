@@ -8,16 +8,38 @@ function subscribe<A extends unknown[]>(channel: string, cb: (...args: A) => voi
   return () => ipcRenderer.removeListener(channel, handler)
 }
 
+// One IPC listener per channel; panes register here, so 20 terminals do not mean 20 listeners.
+function demux<A>(channel: string): (paneId: string, cb: (arg: A) => void) => () => void {
+  const handlers = new Map<string, (arg: A) => void>()
+  ipcRenderer.on(channel, (_e: IpcRendererEvent, paneId: string, arg: A) =>
+    handlers.get(paneId)?.(arg)
+  )
+  return (paneId, cb) => {
+    handlers.set(paneId, cb)
+    return () => {
+      if (handlers.get(paneId) === cb) handlers.delete(paneId)
+    }
+  }
+}
+const onPaneData = demux<string>(IPC.ptyData)
+const onPaneExit = demux<number>(IPC.ptyExit)
+
 const api: SdtermApi = {
   platform: process.platform,
   initial: ipcRenderer.sendSync(IPC.storeLoad) as StoreData,
   pty: {
-    create: (opts) => ipcRenderer.invoke(IPC.ptyCreate, opts),
-    write: (id, data) => ipcRenderer.send(IPC.ptyWrite, id, data),
-    resize: (id, cols, rows) => ipcRenderer.send(IPC.ptyResize, id, cols, rows),
-    kill: (id) => ipcRenderer.send(IPC.ptyKill, id),
-    onData: (cb) => subscribe(IPC.ptyData, cb),
-    onExit: (cb) => subscribe(IPC.ptyExit, cb)
+    attach: (opts) => ipcRenderer.invoke(IPC.ptyAttach, opts),
+    detach: (paneId) => ipcRenderer.send(IPC.ptyDetach, paneId),
+    write: (paneId, data) => ipcRenderer.send(IPC.ptyWrite, paneId, data),
+    resize: (paneId, cols, rows) => ipcRenderer.send(IPC.ptyResize, paneId, cols, rows),
+    kill: (paneId) => ipcRenderer.send(IPC.ptyKill, paneId),
+    park: (paneIds) => ipcRenderer.invoke(IPC.ptyPark, paneIds),
+    busy: (paneIds) => ipcRenderer.invoke(IPC.ptyBusy, paneIds),
+    cwds: () => ipcRenderer.invoke(IPC.ptyCwds),
+    cwd: (paneId) => ipcRenderer.invoke(IPC.ptyCwd, paneId),
+    reportCwd: (paneId, path) => ipcRenderer.send(IPC.ptyReportCwd, paneId, path),
+    onData: onPaneData,
+    onExit: onPaneExit
   },
   store: {
     set: (key, value) => ipcRenderer.send(IPC.storeSet, key, value),
@@ -38,7 +60,16 @@ const api: SdtermApi = {
   app: {
     info: () => ipcRenderer.invoke(IPC.appInfo),
     revealStore: () => ipcRenderer.send(IPC.appRevealStore),
-    pickDirectory: () => ipcRenderer.invoke(IPC.pickDirectory)
+    pickDirectory: () => ipcRenderer.invoke(IPC.pickDirectory),
+    openFolder: (path) => ipcRenderer.invoke(IPC.openFolder, path)
+  },
+  processes: {
+    subscribe: () => ipcRenderer.invoke(IPC.procSubscribe),
+    unsubscribe: () => ipcRenderer.send(IPC.procUnsubscribe),
+    onSample: (cb) => subscribe(IPC.procSample, cb)
+  },
+  windows: {
+    open: (id) => ipcRenderer.send(IPC.windowOpen, id)
   },
   onCommand: (cb) => subscribe(IPC.appCommand, cb)
 }

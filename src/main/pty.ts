@@ -1,22 +1,41 @@
-import { randomUUID } from 'node:crypto'
+import { execFile, execFileSync } from 'node:child_process'
+import { existsSync, readlinkSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
-import { ipcMain, type WebContents } from 'electron'
+import { promisify } from 'node:util'
+import { app, ipcMain, type WebContents } from 'electron'
 import * as nodePty from 'node-pty'
-import { IPC, type PtyCreateOptions, type PtyCreateResult } from '@shared/ipc'
+import { IPC, type PtyAttachOptions, type PtyAttachResult } from '@shared/ipc'
+import { getStore, setStoreSilently } from './store'
+
+/*
+ * Shells belong to the main process, not to a window. A window attaches to a pane's shell and
+ * detaches again; the shell keeps running in between. That is what lets a workspace move to
+ * another window (or survive a window closing) without losing its processes, and the recent
+ * output is replayed so the new view is not blank.
+ */
 
 interface Session {
   proc: nodePty.IPty
-  owner: WebContents
-  buffer: string
+  file: string
+  owner: WebContents | null
+  /** Recent output, replayed when a window attaches. */
+  history: string[]
+  historyLen: number
+  /** Output not yet sent to the attached window. */
+  pending: string
   flushTimer: NodeJS.Timeout | null
+  /** Set on purpose-killed sessions so the exit is not reported as "the shell closed". */
+  killed: boolean
 }
 
 const sessions = new Map<string, Session>()
 
 // Coalesce PTY output so a burst (e.g. `cat bigfile`) is not one IPC message per chunk.
 const FLUSH_MS = 4
+const HISTORY_MAX = 600_000
+
+const run = promisify(execFile)
 
 function defaultShell(): { file: string; args: string[] } {
   if (process.platform === 'win32') return { file: 'powershell.exe', args: [] }
@@ -33,22 +52,37 @@ function configuredShell(custom?: string): { file: string; args: string[] } | nu
   return { file, args: process.platform === 'win32' ? [] : ['-l'] }
 }
 
-function clampSize(n: number, fallback: number): number {
-  return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 1000) : fallback
+const clampSize = (n: number, fallback: number): number =>
+  Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 1000) : fallback
+
+function isDirectory(path: string | undefined): path is string {
+  if (!path) return false
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
 }
 
-function flush(id: string, s: Session): void {
+function pushHistory(s: Session, data: string): void {
+  s.history.push(data)
+  s.historyLen += data.length
+  while (s.historyLen > HISTORY_MAX && s.history.length > 1)
+    s.historyLen -= s.history.shift()!.length
+}
+
+function flush(paneId: string, s: Session): void {
   s.flushTimer = null
-  if (!s.buffer) return
-  const data = s.buffer
-  s.buffer = ''
-  if (!s.owner.isDestroyed()) s.owner.send(IPC.ptyData, id, data)
+  const data = s.pending
+  s.pending = ''
+  if (data && s.owner && !s.owner.isDestroyed()) s.owner.send(IPC.ptyData, paneId, data)
 }
 
-function destroy(id: string): void {
-  const s = sessions.get(id)
+function killSession(paneId: string): void {
+  const s = sessions.get(paneId)
   if (!s) return
-  sessions.delete(id)
+  sessions.delete(paneId)
+  s.killed = true
   if (s.flushTimer) clearTimeout(s.flushTimer)
   try {
     s.proc.kill()
@@ -57,11 +91,110 @@ function destroy(id: string): void {
   }
 }
 
+// ---- Working directory tracking -------------------------------------------------------------
+
+function parseLsof(out: string): Map<number, string> {
+  const map = new Map<number, string>()
+  let pid = 0
+  for (const line of out.split('\n')) {
+    if (line.startsWith('p')) pid = Number(line.slice(1))
+    else if (line.startsWith('n') && pid) map.set(pid, line.slice(1))
+  }
+  return map
+}
+
+// lsof exits non-zero when any listed pid is gone but still prints the others.
+function lsofArgs(pids: number[]): string[] {
+  return ['-a', '-d', 'cwd', '-Fpn', '-p', pids.join(',')]
+}
+
+async function readCwds(pids: number[]): Promise<Map<number, string>> {
+  if (pids.length === 0) return new Map()
+  if (process.platform === 'darwin') {
+    try {
+      return parseLsof((await run('lsof', lsofArgs(pids))).stdout)
+    } catch (err) {
+      return parseLsof((err as { stdout?: string }).stdout ?? '')
+    }
+  }
+  if (process.platform === 'linux') {
+    const map = new Map<number, string>()
+    for (const pid of pids) {
+      try {
+        map.set(pid, readlinkSync(`/proc/${pid}/cwd`))
+      } catch {
+        // process gone
+      }
+    }
+    return map
+  }
+  return new Map() // Windows: not available; shells can report it with OSC 7 / OSC 9;9
+}
+
+function readCwdsSync(pids: number[]): Map<number, string> {
+  if (pids.length === 0) return new Map()
+  if (process.platform === 'darwin') {
+    try {
+      return parseLsof(execFileSync('lsof', lsofArgs(pids), { encoding: 'utf8', timeout: 3000 }))
+    } catch (err) {
+      return parseLsof(String((err as { stdout?: string }).stdout ?? ''))
+    }
+  }
+  if (process.platform === 'linux') {
+    const map = new Map<number, string>()
+    for (const pid of pids) {
+      try {
+        map.set(pid, readlinkSync(`/proc/${pid}/cwd`))
+      } catch {
+        // process gone
+      }
+    }
+    return map
+  }
+  return new Map()
+}
+
+function storeCwds(found: Map<number, string>, ids: string[]): void {
+  const next = { ...getStore().paneCwds }
+  for (const id of ids) {
+    const s = sessions.get(id)
+    const cwd = s ? found.get(s.proc.pid) : undefined
+    if (cwd) next[id] = cwd
+  }
+  setStoreSilently('paneCwds', next)
+}
+
+async function snapshotCwds(paneIds?: string[]): Promise<void> {
+  const ids = (paneIds ?? [...sessions.keys()]).filter((id) => sessions.has(id))
+  const found = await readCwds(ids.map((id) => sessions.get(id)!.proc.pid))
+  storeCwds(found, ids)
+}
+
+// ---------------------------------------------------------------------------------------------
+
 export function registerPtyIpc(): void {
-  ipcMain.handle(IPC.ptyCreate, (event, opts: PtyCreateOptions): PtyCreateResult => {
-    const cwd = opts.cwd && existsSync(opts.cwd) ? opts.cwd : homedir()
-    const id = randomUUID()
+  // Closing a window detaches its shells; it must not end them.
+  app.on('web-contents-created', (_e, wc) => {
+    wc.once('destroyed', () => {
+      for (const s of sessions.values()) if (s.owner === wc) s.owner = null
+    })
+  })
+
+  ipcMain.handle(IPC.ptyAttach, (event, opts: PtyAttachOptions): PtyAttachResult => {
+    const { paneId } = opts
     const owner = event.sender
+    const existing = sessions.get(paneId)
+
+    if (existing) {
+      existing.owner = owner
+      const replay = existing.history.join('')
+      existing.pending = '' // already contained in the history we are returning
+      return { shell: basename(existing.file), replay, fresh: false }
+    }
+
+    // New shell. It starts where the previous one for this pane left off, if known.
+    const remembered = getStore().paneCwds[paneId]
+    const cwd = isDirectory(remembered) ? remembered : isDirectory(opts.cwd) ? opts.cwd : homedir()
 
     const spawn = (shell: { file: string; args: string[] }): nodePty.IPty =>
       nodePty.spawn(shell.file, shell.args, {
@@ -89,41 +222,115 @@ export function registerPtyIpc(): void {
       proc = spawn(defaultShell())
     }
 
-    const session: Session = { proc, owner, buffer: '', flushTimer: null }
-    sessions.set(id, session)
+    const session: Session = {
+      proc,
+      file,
+      owner,
+      history: [],
+      historyLen: 0,
+      pending: '',
+      flushTimer: null,
+      killed: false
+    }
+    sessions.set(paneId, session)
 
     proc.onData((data) => {
-      session.buffer += data
-      if (!session.flushTimer) session.flushTimer = setTimeout(() => flush(id, session), FLUSH_MS)
+      pushHistory(session, data)
+      if (!session.owner) return
+      session.pending += data
+      if (!session.flushTimer)
+        session.flushTimer = setTimeout(() => flush(paneId, session), FLUSH_MS)
     })
 
     proc.onExit(({ exitCode }) => {
-      flush(id, session)
-      sessions.delete(id)
-      if (!owner.isDestroyed()) owner.send(IPC.ptyExit, id, exitCode)
+      flush(paneId, session)
+      if (sessions.get(paneId) === session) sessions.delete(paneId)
+      if (!session.killed && session.owner && !session.owner.isDestroyed()) {
+        session.owner.send(IPC.ptyExit, paneId, exitCode)
+      }
     })
 
-    // Closing or reloading the window must not leak shells.
-    owner.once('destroyed', () => destroy(id))
-
-    return { id, shell: basename(file) }
+    return { shell: basename(file), replay: '', fresh: true }
   })
 
-  ipcMain.on(IPC.ptyWrite, (_e, id: string, data: string) => {
-    sessions.get(id)?.proc.write(data)
+  ipcMain.on(IPC.ptyDetach, (event, paneId: string) => {
+    const s = sessions.get(paneId)
+    if (s && s.owner === event.sender) s.owner = null
   })
 
-  ipcMain.on(IPC.ptyResize, (_e, id: string, cols: number, rows: number) => {
+  ipcMain.on(IPC.ptyWrite, (_e, paneId: string, data: string) => {
+    sessions.get(paneId)?.proc.write(data)
+  })
+
+  ipcMain.on(IPC.ptyResize, (_e, paneId: string, cols: number, rows: number) => {
     try {
-      sessions.get(id)?.proc.resize(clampSize(cols, 80), clampSize(rows, 24))
+      sessions.get(paneId)?.proc.resize(clampSize(cols, 80), clampSize(rows, 24))
     } catch {
       // resize races with exit; safe to ignore
     }
   })
 
-  ipcMain.on(IPC.ptyKill, (_e, id: string) => destroy(id))
+  ipcMain.on(IPC.ptyKill, (_e, paneId: string) => killSession(paneId))
+
+  ipcMain.handle(IPC.ptyPark, async (_e, paneIds: string[]) => {
+    await snapshotCwds(paneIds) // remember where each shell was before it goes away
+    for (const id of paneIds) killSession(id)
+  })
+
+  ipcMain.handle(IPC.ptyBusy, (_e, paneIds: string[]): string[] => {
+    const norm = (name: string): string =>
+      basename(name)
+        .replace(/\.exe$/i, '')
+        .replace(/^-/, '')
+    return paneIds.filter((id) => {
+      const s = sessions.get(id)
+      if (!s) return false
+      try {
+        return norm(s.proc.process) !== norm(s.file) // something is running in the foreground
+      } catch {
+        return false
+      }
+    })
+  })
+
+  ipcMain.handle(IPC.ptyCwds, async (): Promise<Record<string, string>> => {
+    await snapshotCwds()
+    return getStore().paneCwds
+  })
+
+  ipcMain.handle(IPC.ptyCwd, async (_e, paneId: string): Promise<string | null> => {
+    if (sessions.has(paneId)) await snapshotCwds([paneId])
+    const cwd = getStore().paneCwds[paneId]
+    return isDirectory(cwd) ? cwd : null
+  })
+
+  ipcMain.on(IPC.ptyReportCwd, (_e, paneId: string, path: string) => {
+    if (typeof path === 'string' && isDirectory(path) && sessions.has(paneId)) {
+      setStoreSilently('paneCwds', { ...getStore().paneCwds, [paneId]: path })
+    }
+  })
+
+  // Keep the remembered folders fresh, so a crash or a forced quit loses little.
+  setInterval(() => {
+    if (sessions.size > 0) void snapshotCwds()
+  }, 20_000).unref()
 }
 
-export function killAllPtys(): void {
-  for (const id of [...sessions.keys()]) destroy(id)
+/**
+ * Quitting: remember every folder one last time, end all shells, and wait until they have
+ * really exited. Letting the process die while node-pty's reader threads are still running
+ * can abort it with a native exception (macOS then shows a "quit unexpectedly" dialog).
+ */
+export function killAllPtys(): Promise<void> {
+  const ids = [...sessions.keys()]
+  storeCwds(readCwdsSync(ids.map((id) => sessions.get(id)!.proc.pid)), ids)
+  const exited = ids.map(
+    (id) =>
+      new Promise<void>((resolve) => {
+        sessions.get(id)!.proc.onExit(() => resolve())
+      })
+  )
+  for (const id of ids) killSession(id)
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 1500))
+  return Promise.race([Promise.all(exited).then(() => undefined), timeout])
 }

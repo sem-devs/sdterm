@@ -4,15 +4,14 @@ import { SettingsView } from '@/components/settings/settings-view'
 import { Sidebar } from '@/components/sidebar'
 import { cn } from '@/lib/utils'
 import { useUi } from '@/store/ui'
-import { startWorkspacePersistence, useWorkspaces } from '@/store/workspace'
+import { selectActive, startWorkspacePersistence, useWorkspaces } from '@/store/workspace'
 
 const isMac = window.api.platform === 'darwin'
 
 function App(): React.JSX.Element {
   const view = useUi((s) => s.view)
-  const workspaceName = useWorkspaces(
-    (s) => s.workspaces.find((w) => w.id === s.activeWorkspaceId)?.name ?? ''
-  )
+  const workspaceName = useWorkspaces((s) => selectActive(s)?.name ?? '')
+  const parked = useWorkspaces((s) => selectActive(s)?.parked ?? false)
 
   useEffect(() => startWorkspacePersistence(), [])
 
@@ -32,8 +31,8 @@ function App(): React.JSX.Element {
           s.addWorkspace()
         }
         if (cmd === 'close-pane') {
-          const ws = s.workspaces.find((w) => w.id === s.activeWorkspaceId)
-          if (ws?.activePaneId) s.closePane(ws.activePaneId)
+          const ws = selectActive(s)
+          if (ws && !ws.parked && ws.activePaneId) s.closePane(ws.activePaneId)
         }
       }),
     []
@@ -52,8 +51,11 @@ function App(): React.JSX.Element {
         >
           <h1 className="font-display text-[13px] font-semibold tracking-tight">
             {view === 'settings' ? 'Settings' : workspaceName}
+            {view === 'terminals' && parked && (
+              <span className="text-muted-foreground ml-2 text-xs font-normal">Parked</span>
+            )}
           </h1>
-          {view === 'terminals' && (
+          {view === 'terminals' && !parked && (
             <div className="app-no-drag">
               <NewTerminalButton />
             </div>

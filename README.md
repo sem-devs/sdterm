@@ -6,6 +6,11 @@ Work in progress. It runs real shells (zsh on macOS, PowerShell on Windows) in a
 
 ## Features
 
+- **Projects that stay open.** Every workspace is a project with its own folder. Everything is restored at launch: workspaces, terminals, names, notes, colors, and each terminal starts again in the folder it was in. Terminals are tied to the app, not to a window, so they survive moving a workspace between windows.
+- **Park what you are not working on.** Park a workspace to stop its shells (it warns if something is still running) while keeping names, notes, colors and folders. Launch it again with one click. Parked workspaces collapse into their own group.
+- **More than one window.** Move a workspace to another window (or a new one) from its menu; the layout is saved and restored. Closing an extra window hands its workspaces back to the main one.
+- **Rename, delete, set the project folder** from each workspace's menu, and open any terminal's folder in Finder or Explorer.
+- **Processes window** like Activity Monitor or Resource Monitor: top CPU and memory users, grouped by name, sortable and filterable.
 - **Name, note and color per terminal.** Click a terminal's title bar to say what it is for and where you left off. The note shows in the title bar and in the sidebar overview, and everything is saved between launches.
 - **Resource monitors you can pop out.** CPU, RAM, CPU and RAM together, disk I/O and network I/O, docked in the sidebar. Each one (or the whole summary) opens as its own small window that you can place anywhere, keep on top, and that remembers its position.
 - **Windows that behave.** The main window opens as large as the screen but is a normal window (no full-screen mode, resizable by dragging). Pop-outs resize by dragging any edge or the corner handle, and have a button to fill the screen and go back.

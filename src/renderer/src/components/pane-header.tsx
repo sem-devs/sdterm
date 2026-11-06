@@ -1,4 +1,4 @@
-import { Prohibit, X } from '@phosphor-icons/react'
+import { FolderOpen, Prohibit, X } from '@phosphor-icons/react'
 import { PANE_COLORS, type PaneColor } from '@shared/settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import { paneLabel, useWorkspaces, type Pane } from '@/store/workspace'
 
 const isMac = window.api.platform === 'darwin'
 const CLOSE_HINT = isMac ? '⌘W' : 'Ctrl+Shift+W'
+const FILE_MANAGER = isMac ? 'Finder' : 'Explorer'
 
 const COLOR_NAMES: Record<PaneColor, string> = {
   cyan: 'Cyan',
@@ -91,14 +92,21 @@ function Editor({ pane }: { pane: Pane }): React.JSX.Element {
 export function PaneHeader({
   pane,
   index,
-  focused
+  focused,
+  folder
 }: {
   pane: Pane
   index: number
   focused: boolean
+  /** The workspace's project folder, used when the shell's own folder is not known. */
+  folder?: string
 }): React.JSX.Element {
   const closePane = useWorkspaces((s) => s.closePane)
   const label = paneLabel(pane, index)
+  const showFolder = async (): Promise<void> => {
+    const dir = (await window.api.pty.cwd(pane.id)) ?? (folder || null)
+    if (dir) await window.api.app.openFolder(dir)
+  }
   const firstLine = pane.note.split('\n')[0]
 
   return (
@@ -149,6 +157,21 @@ export function PaneHeader({
           <Editor pane={pane} />
         </PopoverContent>
       </Popover>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Show folder in ${FILE_MANAGER}`}
+            className="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+            onClick={() => void showFolder()}
+          >
+            <FolderOpen />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Show folder in {FILE_MANAGER}</TooltipContent>
+      </Tooltip>
 
       <Tooltip>
         <TooltipTrigger asChild>
