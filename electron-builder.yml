@@ -64,6 +64,7 @@ linux:
   synopsis: A terminal workspace
   description: Many terminals in one window, each with a name, a note and a color, with live resource monitors.
   executableName: sdterm
+  syncDesktopName: true
   desktop:
     entry:
       StartupWMClass: sdterm
