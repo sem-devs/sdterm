@@ -1,13 +1,13 @@
-import { TerminalWindow, Plus, X } from '@phosphor-icons/react'
+import { TerminalWindow, Plus } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { PaneHeader } from '@/components/pane-header'
 import { TerminalPane } from '@/components/terminal-pane'
 import { cn } from '@/lib/utils'
 import { useWorkspaces, type Workspace } from '@/store/workspace'
 
 const isMac = window.api.platform === 'darwin'
 const NEW_TERMINAL_HINT = isMac ? '⌘T' : 'Ctrl+Shift+T'
-const CLOSE_HINT = isMac ? '⌘W' : 'Ctrl+Shift+W'
 
 function gridClass(count: number): string {
   if (count <= 1) return 'grid-cols-1'
@@ -21,7 +21,9 @@ function EmptyWorkspace(): React.JSX.Element {
     <div className="flex h-full flex-col items-start justify-center gap-4 px-16">
       <TerminalWindow className="text-muted-foreground size-8" />
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold tracking-tight">No terminals in this workspace</h2>
+        <h2 className="font-display text-base font-semibold tracking-tight">
+          No terminals in this workspace
+        </h2>
         <p className="text-muted-foreground max-w-[44ch] text-sm">
           Open a shell to get started. Each terminal keeps running while you switch workspaces.
         </p>
@@ -40,7 +42,7 @@ function PaneFrame({
 }): React.JSX.Element {
   const pane = workspace.panes[index]
   const focused = workspace.activePaneId === pane.id
-  const { focusPane, closePane } = useWorkspaces.getState()
+  const focusPane = useWorkspaces((s) => s.focusPane)
 
   return (
     <section
@@ -50,30 +52,7 @@ function PaneFrame({
       )}
       onMouseDown={() => focusPane(pane.id)}
     >
-      <header
-        className={cn(
-          'flex h-7 shrink-0 items-center justify-between border-t-2 pr-1 pl-3 text-xs',
-          focused ? 'border-primary text-foreground' : 'text-muted-foreground border-transparent'
-        )}
-      >
-        <span className="truncate">{pane.title}</span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label="Close terminal"
-              onClick={(e) => {
-                e.stopPropagation()
-                closePane(pane.id)
-              }}
-            >
-              <X />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Close terminal ({CLOSE_HINT})</TooltipContent>
-        </Tooltip>
-      </header>
+      <PaneHeader pane={pane} index={index} focused={focused} />
       <div className="min-h-0 flex-1">
         <TerminalPane paneId={pane.id} focused={focused} />
       </div>
@@ -81,13 +60,13 @@ function PaneFrame({
   )
 }
 
-export function PaneGrid(): React.JSX.Element {
+export function PaneGrid({ hidden }: { hidden?: boolean }): React.JSX.Element {
   const workspaces = useWorkspaces((s) => s.workspaces)
   const activeId = useWorkspaces((s) => s.activeWorkspaceId)
 
   // Every workspace stays mounted so its shells keep running while hidden.
   return (
-    <div className="min-h-0 flex-1">
+    <div className={cn('min-h-0 flex-1', hidden && 'hidden')}>
       {workspaces.map((ws) => (
         <div key={ws.id} className={cn('h-full', ws.id !== activeId && 'hidden')}>
           {ws.panes.length === 0 ? (

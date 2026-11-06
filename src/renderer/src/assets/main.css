@@ -1,44 +1,59 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import '@fontsource-variable/geist';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/space-grotesk';
 @import '@fontsource-variable/geist-mono';
 
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design tokens.
- * One neutral (zinc), one accent (ember), one radius scale. Do not add a second accent:
- * every interactive highlight, focus ring and active-pane marker uses --primary.
+ * Design tokens, from the SEM Devs brand book.
+ *   Cyan #52E5F1 and Tech Blue #1D56B1 are the accent (cyan on dark, blue on light, so both
+ *   keep contrast). Deep Black #0D0D0D, Ghost White #F0F0F0, Graphite #5A5A5A and Silver
+ *   #C4C4C4 are the neutrals. Space Grotesk is the brand font, Inter the UI font, Geist Mono
+ *   the terminal (the brand has no mono).
+ * One accent only: focus rings, active states and primary buttons all use --primary.
+ * Per-terminal colours (--pane-*) are user labels, not UI accents.
  * Shape rule: controls use rounded-md; surfaces (panes, sidebar, bars) are square and
  * separated by 1px lines, not cards.
  */
 :root {
   --radius: 0.375rem;
 
-  --background: oklch(0.985 0.002 286);
-  --foreground: oklch(0.21 0.006 286);
-  --card: oklch(0.97 0.003 286);
-  --card-foreground: oklch(0.21 0.006 286);
-  --popover: oklch(0.985 0.002 286);
-  --popover-foreground: oklch(0.21 0.006 286);
-  --primary: oklch(0.66 0.16 50);
-  --primary-foreground: oklch(0.2 0.02 50);
-  --secondary: oklch(0.94 0.004 286);
-  --secondary-foreground: oklch(0.25 0.006 286);
-  --muted: oklch(0.955 0.003 286);
-  --muted-foreground: oklch(0.47 0.01 286);
-  --accent: oklch(0.93 0.005 286);
-  --accent-foreground: oklch(0.21 0.006 286);
-  --destructive: oklch(0.55 0.2 27);
-  --border: oklch(0 0 0 / 10%);
-  --input: oklch(0 0 0 / 14%);
-  --ring: oklch(0.66 0.16 50);
+  --background: #f8f8f8;
+  --foreground: #161616;
+  --card: #f0f0f0; /* Ghost White: sidebar */
+  --card-foreground: #161616;
+  --popover: #ffffff;
+  --popover-foreground: #161616;
+  --primary: #1d56b1; /* Tech Blue */
+  --primary-foreground: #f8f8f8;
+  --secondary: #ececec;
+  --secondary-foreground: #161616;
+  --muted: #eeeeee;
+  --muted-foreground: #5a5a5a; /* Graphite */
+  --accent: #e6e6e6;
+  --accent-foreground: #161616;
+  --destructive: #c2334d;
+  --border: rgb(0 0 0 / 11%);
+  --input: rgb(0 0 0 / 16%);
+  --ring: #1d56b1;
+
+  /* Per-terminal colours (light) */
+  --pane-cyan: #0b8fa1;
+  --pane-blue: #1d56b1;
+  --pane-green: #007a33;
+  --pane-amber: #a8680a;
+  --pane-orange: #c2500f;
+  --pane-rose: #c2334d;
+  --pane-violet: #7040c8;
+  --pane-graphite: #5a5a5a;
 
   /* Terminal palette (read by xterm at runtime, see lib/terminal-theme.ts) */
-  --term-bg: #fafafa;
+  --term-bg: #f8f8f8;
   --term-fg: #27272a;
-  --term-cursor: #d9792b;
-  --term-selection: rgba(217, 121, 43, 0.22);
+  --term-cursor: #1d56b1;
+  --term-selection: rgba(29, 86, 177, 0.2);
   --term-black: #27272a;
   --term-red: #c93c46;
   --term-green: #2f7d4f;
@@ -58,29 +73,39 @@
 }
 
 .dark {
-  --background: oklch(0.21 0.006 286);
-  --foreground: oklch(0.92 0.004 286);
-  --card: oklch(0.18 0.006 286);
-  --card-foreground: oklch(0.92 0.004 286);
-  --popover: oklch(0.25 0.006 286);
-  --popover-foreground: oklch(0.92 0.004 286);
-  --primary: oklch(0.74 0.15 55);
-  --primary-foreground: oklch(0.2 0.02 55);
-  --secondary: oklch(0.27 0.006 286);
-  --secondary-foreground: oklch(0.92 0.004 286);
-  --muted: oklch(0.26 0.006 286);
-  --muted-foreground: oklch(0.7 0.01 286);
-  --accent: oklch(0.29 0.006 286);
-  --accent-foreground: oklch(0.95 0.004 286);
-  --destructive: oklch(0.7 0.17 25);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.74 0.15 55);
+  --background: #141414;
+  --foreground: #f0f0f0; /* Ghost White */
+  --card: #0d0d0d; /* Deep Black: sidebar */
+  --card-foreground: #f0f0f0;
+  --popover: #1c1c1c;
+  --popover-foreground: #f0f0f0;
+  --primary: #52e5f1; /* Cyan */
+  --primary-foreground: #0d0d0d;
+  --secondary: #222222;
+  --secondary-foreground: #f0f0f0;
+  --muted: #1f1f1f;
+  --muted-foreground: #9a9a9a;
+  --accent: #262626;
+  --accent-foreground: #f8f8f8;
+  --destructive: #f2677c;
+  --border: rgb(255 255 255 / 9%);
+  --input: rgb(255 255 255 / 14%);
+  --ring: #52e5f1;
 
-  --term-bg: #18181b;
+  /* Per-terminal colours (dark) */
+  --pane-cyan: #52e5f1;
+  --pane-blue: #5b93f0;
+  --pane-green: #00c853; /* Cyber Green */
+  --pane-amber: #f2b84b;
+  --pane-orange: #f98a47;
+  --pane-rose: #f2677c;
+  --pane-violet: #a98bf5;
+  --pane-graphite: #9a9a9a;
+
+  --term-bg: #141414;
   --term-fg: #d4d4d8;
-  --term-cursor: #f0903f;
-  --term-selection: rgba(240, 144, 63, 0.26);
+  --term-cursor: #52e5f1;
+  --term-selection: rgba(82, 229, 241, 0.22);
   --term-black: #3f3f46;
   --term-red: #ef6b73;
   --term-green: #7ec699;
@@ -100,7 +125,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   --color-background: var(--background);
@@ -142,6 +168,18 @@
   body {
     @apply bg-background text-foreground cursor-default overflow-hidden font-sans text-[13px] antialiased select-none;
   }
+
+  /* Form fields and notes must stay selectable and editable. */
+  input,
+  textarea {
+    @apply select-text;
+  }
+}
+
+/* Thin, quiet scrollbars that match the theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
 }
 
 /* Electron title bar: drag by default, controls opt out. */

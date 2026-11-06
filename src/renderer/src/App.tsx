@@ -1,23 +1,36 @@
 import { useEffect } from 'react'
 import { NewTerminalButton, PaneGrid } from '@/components/pane-grid'
+import { SettingsView } from '@/components/settings/settings-view'
 import { Sidebar } from '@/components/sidebar'
 import { cn } from '@/lib/utils'
-import { useWorkspaces } from '@/store/workspace'
+import { useUi } from '@/store/ui'
+import { startWorkspacePersistence, useWorkspaces } from '@/store/workspace'
 
 const isMac = window.api.platform === 'darwin'
 
 function App(): React.JSX.Element {
-  const title = useWorkspaces(
+  const view = useUi((s) => s.view)
+  const workspaceName = useWorkspaces(
     (s) => s.workspaces.find((w) => w.id === s.activeWorkspaceId)?.name ?? ''
   )
+
+  useEffect(() => startWorkspacePersistence(), [])
 
   // Native menu items (and their shortcuts) arrive here as commands.
   useEffect(
     () =>
       window.api.onCommand((cmd) => {
         const s = useWorkspaces.getState()
-        if (cmd === 'new-pane') s.addPane()
-        if (cmd === 'new-workspace') s.addWorkspace()
+        const ui = useUi.getState()
+        if (cmd === 'open-settings') ui.setView(ui.view === 'settings' ? 'terminals' : 'settings')
+        if (cmd === 'new-pane') {
+          ui.setView('terminals')
+          s.addPane()
+        }
+        if (cmd === 'new-workspace') {
+          ui.setView('terminals')
+          s.addWorkspace()
+        }
         if (cmd === 'close-pane') {
           const ws = s.workspaces.find((w) => w.id === s.activeWorkspaceId)
           if (ws?.activePaneId) s.closePane(ws.activePaneId)
@@ -37,12 +50,17 @@ function App(): React.JSX.Element {
             isMac ? 'pr-2' : 'pr-36'
           )}
         >
-          <h1 className="text-[13px] font-medium">{title}</h1>
-          <div className="app-no-drag">
-            <NewTerminalButton />
-          </div>
+          <h1 className="font-display text-[13px] font-semibold tracking-tight">
+            {view === 'settings' ? 'Settings' : workspaceName}
+          </h1>
+          {view === 'terminals' && (
+            <div className="app-no-drag">
+              <NewTerminalButton />
+            </div>
+          )}
         </div>
-        <PaneGrid />
+        <PaneGrid hidden={view === 'settings'} />
+        {view === 'settings' && <SettingsView />}
       </main>
     </div>
   )

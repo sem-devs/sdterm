@@ -1,35 +1,35 @@
-import { app, shell, BrowserWindow, ipcMain, nativeTheme } from 'electron'
-import { join } from 'path'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { registerPtyIpc, killAllPtys } from './pty'
+import { IPC } from '@shared/ipc'
+import type { AppInfo } from '@shared/data'
+import { killAllPtys, registerPtyIpc } from './pty'
 import { installMenu } from './menu'
-import { IPC, type ThemeSource } from '@shared/ipc'
+import {
+  flushStore,
+  getStore,
+  initStore,
+  onStoreChange,
+  registerStoreIpc,
+  storePath
+} from './store'
+import { registerResourcesIpc, setSampleInterval } from './resources'
+import { closeAllWidgets, registerWidgetIpc } from './widgets'
+import { appWebPreferences, chrome, hardenWindow, isMac, loadRenderer, syncChrome } from './window'
+import { runDevCapture } from './dev-capture'
 
-const isMac = process.platform === 'darwin'
-
-// Match --background in the renderer, so the window never flashes the wrong colour while loading.
-const BG_DARK = '#18181b'
-const BG_LIGHT = '#fafafa'
-
-function chrome(): { bg: string; symbol: string } {
-  return nativeTheme.shouldUseDarkColors
-    ? { bg: BG_DARK, symbol: '#a1a1aa' }
-    : { bg: BG_LIGHT, symbol: '#52525b' }
+if (!app.isPackaged && process.env.SEM_TERM_USER_DATA) {
+  app.setPath('userData', process.env.SEM_TERM_USER_DATA)
 }
 
-function syncChrome(win: BrowserWindow): void {
-  const { bg, symbol } = chrome()
-  win.setBackgroundColor(bg)
-  if (!isMac) win.setTitleBarOverlay({ color: bg, symbolColor: symbol, height: 40 })
-}
+let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1280,
     height: 800,
-    minWidth: 720,
-    minHeight: 460,
+    minWidth: 760,
+    minHeight: 480,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: chrome().bg,
@@ -40,49 +40,75 @@ function createWindow(): void {
       ? { titleBarOverlay: { color: chrome().bg, symbolColor: chrome().symbol, height: 40 } }
       : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: appWebPreferences()
   })
+  mainWindow = win
 
-  mainWindow.on('ready-to-show', () => mainWindow.show())
-
-  // Links from the terminal open in the system browser, http(s) only.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
-    return { action: 'deny' }
+  hardenWindow(win)
+  win.on('ready-to-show', () => win.show())
+  // Pop-out widgets belong to the session: they go away with the main window.
+  win.on('closed', () => {
+    mainWindow = null
+    closeAllWidgets()
   })
 
   if (is.dev) {
-    mainWindow.webContents.on('console-message', (event) => {
+    win.webContents.on('console-message', (event) => {
       if (event.level === 'error' || event.level === 'warning') {
         console.log(`[renderer ${event.level}] ${event.message}`)
       }
     })
   }
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  loadRenderer(win)
+  runDevCapture(win)
+}
+
+function registerAppIpc(): void {
+  ipcMain.handle(IPC.appInfo, (): AppInfo => ({
+    name: app.name,
+    version: app.getVersion(),
+    platform: process.platform,
+    storePath: storePath()
+  }))
+  ipcMain.handle(IPC.pickDirectory, async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? undefined
+    const result = await dialog.showOpenDialog(win!, { properties: ['openDirectory'] })
+    return result.canceled ? null : result.filePaths[0]
+  })
 }
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.semdevs.semterm')
+  app.setAboutPanelOptions({
+    applicationName: 'SEM Term',
+    applicationVersion: app.getVersion(),
+    copyright: 'SEM Devs',
+    website: 'https://sem-devs.com'
+  })
+
+  initStore()
+  registerStoreIpc()
+  registerPtyIpc()
+  registerResourcesIpc()
+  registerWidgetIpc()
+  registerAppIpc()
+
+  // The theme and the sampling rate live in Settings; main applies them wherever they change.
+  const applySettings = (s = getStore().settings): void => {
+    nativeTheme.themeSource = s.appearance.theme
+    setSampleInterval(s.resources.intervalMs)
+  }
+  applySettings()
+  onStoreChange('settings', (s) => applySettings(s))
+  nativeTheme.on('updated', () => {
+    for (const win of BrowserWindow.getAllWindows()) syncChrome(win, win === mainWindow)
+  })
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerPtyIpc()
-  ipcMain.on(IPC.setTheme, (_e, mode: ThemeSource) => {
-    if (mode === 'system' || mode === 'light' || mode === 'dark') nativeTheme.themeSource = mode
-  })
-  nativeTheme.on('updated', () => BrowserWindow.getAllWindows().forEach(syncChrome))
   installMenu(is.dev)
   createWindow()
 
@@ -91,7 +117,10 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('before-quit', killAllPtys)
+app.on('before-quit', () => {
+  killAllPtys()
+  flushStore()
+})
 
 app.on('window-all-closed', () => {
   if (!isMac) app.quit()

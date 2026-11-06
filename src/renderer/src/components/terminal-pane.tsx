@@ -4,16 +4,31 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
+import type { Settings } from '@shared/settings'
 import { readTerminalTheme } from '@/lib/terminal-theme'
+import { terminalFontFamily } from '@/lib/terminal-font'
 import { onResolvedThemeChange } from '@/hooks/use-theme'
+import { useSettings } from '@/store/settings'
 import { useWorkspaces } from '@/store/workspace'
 
-const FONT = '"Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace'
 const isMac = window.api.platform === 'darwin'
 
 interface Props {
   paneId: string
   focused: boolean
+}
+
+type TerminalSettings = Settings['terminal']
+
+function applySettings(term: Terminal, fit: FitAddon, t: TerminalSettings): void {
+  term.options.fontFamily = terminalFontFamily(t)
+  term.options.fontSize = t.fontSize
+  term.options.lineHeight = t.lineHeight
+  term.options.cursorStyle = t.cursorStyle
+  term.options.cursorBlink = t.cursorBlink
+  term.options.scrollback = t.scrollback
+  term.options.macOptionIsMeta = t.optionAsMeta
+  fit.fit() // cell size changed
 }
 
 export function TerminalPane({ paneId, focused }: Props): React.JSX.Element {
@@ -23,14 +38,16 @@ export function TerminalPane({ paneId, focused }: Props): React.JSX.Element {
   useEffect(() => {
     const host = hostRef.current!
     const { pty } = window.api
+    const cfg = useSettings.getState().settings.terminal
 
     const term = new Terminal({
-      fontFamily: FONT,
-      fontSize: 13,
-      lineHeight: 1.25,
-      scrollback: 10_000,
-      cursorStyle: 'bar',
-      macOptionIsMeta: true,
+      fontFamily: terminalFontFamily(cfg),
+      fontSize: cfg.fontSize,
+      lineHeight: cfg.lineHeight,
+      scrollback: cfg.scrollback,
+      cursorStyle: cfg.cursorStyle,
+      cursorBlink: cfg.cursorBlink,
+      macOptionIsMeta: cfg.optionAsMeta,
       allowProposedApi: true,
       theme: readTerminalTheme()
     })
@@ -70,23 +87,38 @@ export function TerminalPane({ paneId, focused }: Props): React.JSX.Element {
     let disposed = false
     const cleanups: Array<() => void> = []
 
-    pty.create({ cols: term.cols, rows: term.rows }).then(({ id }) => {
-      if (disposed) {
-        pty.kill(id)
-        return
-      }
-      ptyId = id
-      cleanups.push(
-        pty.onData((pid, data) => pid === id && term.write(data)),
-        pty.onExit((pid) => pid === id && useWorkspaces.getState().closePane(paneId)),
-        term.onData((data) => pty.write(id, data)).dispose,
-        term.onResize(({ cols, rows }) => pty.resize(id, cols, rows)).dispose,
-        term.onTitleChange((title) => title && useWorkspaces.getState().setPaneTitle(paneId, title))
-          .dispose
-      )
-      // The pane may have been resized while the shell was starting.
-      pty.resize(id, term.cols, term.rows)
-    })
+    pty
+      .create({
+        cols: term.cols,
+        rows: term.rows,
+        shell: cfg.shell || undefined,
+        cwd: cfg.startDirectory || undefined
+      })
+      .then(({ id }) => {
+        if (disposed) {
+          pty.kill(id)
+          return
+        }
+        ptyId = id
+        cleanups.push(
+          pty.onData((pid, data) => pid === id && term.write(data)),
+          pty.onExit((pid) => pid === id && useWorkspaces.getState().closePane(paneId)),
+          term.onData((data) => pty.write(id, data)).dispose,
+          term.onResize(({ cols, rows }) => pty.resize(id, cols, rows)).dispose,
+          term.onTitleChange((title) => useWorkspaces.getState().setAutoTitle(paneId, title))
+            .dispose
+        )
+        // The pane may have been resized while the shell was starting.
+        pty.resize(id, term.cols, term.rows)
+      })
+
+    cleanups.push(
+      term.onSelectionChange(() => {
+        if (useSettings.getState().settings.terminal.copyOnSelect && term.hasSelection()) {
+          void navigator.clipboard.writeText(term.getSelection())
+        }
+      }).dispose
+    )
 
     let raf = 0
     const observer = new ResizeObserver(() => {
@@ -95,11 +127,16 @@ export function TerminalPane({ paneId, focused }: Props): React.JSX.Element {
     })
     observer.observe(host)
 
-    // Cell size depends on the font, so re-measure once Geist Mono has actually loaded.
-    void document.fonts.load('13px "Geist Mono Variable"').then(() => {
-      if (disposed) return
-      term.options.fontFamily = FONT
-      fit.fit()
+    // Cell size depends on the font, so re-measure once the bundled font has actually loaded.
+    void document.fonts.load(`${cfg.fontSize}px "Geist Mono Variable"`).then(() => {
+      if (!disposed) applySettings(term, fit, useSettings.getState().settings.terminal)
+    })
+
+    // Settings changes apply to live terminals immediately.
+    const offSettings = useSettings.subscribe((state, prev) => {
+      if (state.settings.terminal !== prev.settings.terminal) {
+        applySettings(term, fit, state.settings.terminal)
+      }
     })
 
     const offTheme = onResolvedThemeChange(() => {
@@ -110,6 +147,7 @@ export function TerminalPane({ paneId, focused }: Props): React.JSX.Element {
       disposed = true
       cancelAnimationFrame(raf)
       observer.disconnect()
+      offSettings()
       offTheme()
       cleanups.forEach((fn) => fn())
       if (ptyId) pty.kill(ptyId)

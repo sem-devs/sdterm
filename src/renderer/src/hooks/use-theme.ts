@@ -1,19 +1,7 @@
-import { useCallback, useState } from 'react'
+import type { ThemeMode } from '@shared/settings'
+import { useSettings } from '@/store/settings'
 
-export type ThemeMode = 'system' | 'light' | 'dark'
-
-const KEY = 'sem-term:theme'
 const THEME_EVENT = 'sem-term:theme-change'
-
-function readStored(): ThemeMode {
-  try {
-    const v = localStorage.getItem(KEY)
-    if (v === 'light' || v === 'dark' || v === 'system') return v
-  } catch {
-    // storage unavailable: fall back to system
-  }
-  return 'system'
-}
 
 function resolve(mode: ThemeMode): 'light' | 'dark' {
   if (mode !== 'system') return mode
@@ -21,34 +9,25 @@ function resolve(mode: ThemeMode): 'light' | 'dark' {
 }
 
 function apply(mode: ThemeMode): void {
-  // Keeps prefers-color-scheme, the window background and the Windows caption buttons in step.
-  window.api.setTheme(mode)
   const resolved = resolve(mode)
   document.documentElement.classList.toggle('dark', resolved === 'dark')
   document.documentElement.style.colorScheme = resolved
   window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: resolved }))
 }
 
-// Call once before first render so there is no flash of the wrong theme.
+// Call once before the first render so there is no flash of the wrong theme. The main process
+// mirrors the same setting onto nativeTheme (window background, Windows caption buttons).
 export function initTheme(): void {
-  apply(readStored())
-  window
-    .matchMedia('(prefers-color-scheme: dark)')
-    .addEventListener('change', () => readStored() === 'system' && apply('system'))
-}
-
-export function useTheme(): { mode: ThemeMode; setMode: (m: ThemeMode) => void } {
-  const [mode, setModeState] = useState<ThemeMode>(readStored)
-  const setMode = useCallback((m: ThemeMode) => {
-    try {
-      localStorage.setItem(KEY, m)
-    } catch {
-      // not persisted, still applied for this session
+  apply(useSettings.getState().settings.appearance.theme)
+  useSettings.subscribe((state, prev) => {
+    if (state.settings.appearance.theme !== prev.settings.appearance.theme) {
+      apply(state.settings.appearance.theme)
     }
-    setModeState(m)
-    apply(m)
-  }, [])
-  return { mode, setMode }
+  })
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    const mode = useSettings.getState().settings.appearance.theme
+    if (mode === 'system') apply('system')
+  })
 }
 
 // Subscribe to the resolved theme (light/dark), e.g. to re-skin xterm.

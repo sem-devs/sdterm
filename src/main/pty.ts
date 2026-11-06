@@ -24,6 +24,15 @@ function defaultShell(): { file: string; args: string[] } {
   return { file: process.env.SHELL || '/bin/zsh', args: ['-l'] }
 }
 
+// A shell chosen in Settings. A bare name (e.g. "fish", "pwsh.exe") is resolved through
+// PATH by the OS; anything with a path separator must exist.
+function configuredShell(custom?: string): { file: string; args: string[] } | null {
+  const file = custom?.trim()
+  if (!file) return null
+  if (/[\\/]/.test(file) && !existsSync(file)) return null
+  return { file, args: process.platform === 'win32' ? [] : ['-l'] }
+}
+
 function clampSize(n: number, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 1000) : fallback
 }
@@ -50,23 +59,35 @@ function destroy(id: string): void {
 
 export function registerPtyIpc(): void {
   ipcMain.handle(IPC.ptyCreate, (event, opts: PtyCreateOptions): PtyCreateResult => {
-    const { file, args } = defaultShell()
     const cwd = opts.cwd && existsSync(opts.cwd) ? opts.cwd : homedir()
     const id = randomUUID()
     const owner = event.sender
 
-    const proc = nodePty.spawn(file, args, {
-      name: 'xterm-256color',
-      cols: clampSize(opts.cols, 80),
-      rows: clampSize(opts.rows, 24),
-      cwd,
-      env: {
-        ...process.env,
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        TERM_PROGRAM: 'sem-term'
-      } as Record<string, string>
-    })
+    const spawn = (shell: { file: string; args: string[] }): nodePty.IPty =>
+      nodePty.spawn(shell.file, shell.args, {
+        name: 'xterm-256color',
+        cols: clampSize(opts.cols, 80),
+        rows: clampSize(opts.rows, 24),
+        cwd,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor',
+          TERM_PROGRAM: 'sem-term'
+        } as Record<string, string>
+      })
+
+    // A typo in the shell setting must not leave the user without any terminal.
+    const chosen = configuredShell(opts.shell)
+    let file = (chosen ?? defaultShell()).file
+    let proc: nodePty.IPty
+    try {
+      proc = spawn(chosen ?? defaultShell())
+    } catch (err) {
+      if (!chosen) throw err
+      file = defaultShell().file
+      proc = spawn(defaultShell())
+    }
 
     const session: Session = { proc, owner, buffer: '', flushTimer: null }
     sessions.set(id, session)
