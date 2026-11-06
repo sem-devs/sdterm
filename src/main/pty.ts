@@ -19,6 +19,8 @@ interface Session {
   proc: nodePty.IPty
   file: string
   owner: WebContents | null
+  /** The view (see PtyAttachOptions.viewId) that currently receives output. */
+  view: string | null
   /** Recent output, replayed when a window attaches. */
   history: string[]
   historyLen: number
@@ -176,7 +178,12 @@ export function registerPtyIpc(): void {
   // Closing a window detaches its shells; it must not end them.
   app.on('web-contents-created', (_e, wc) => {
     wc.once('destroyed', () => {
-      for (const s of sessions.values()) if (s.owner === wc) s.owner = null
+      for (const s of sessions.values()) {
+        if (s.owner === wc) {
+          s.owner = null
+          s.view = null
+        }
+      }
     })
   })
 
@@ -187,6 +194,7 @@ export function registerPtyIpc(): void {
 
     if (existing) {
       existing.owner = owner
+      existing.view = opts.viewId
       const replay = existing.history.join('')
       existing.pending = '' // already contained in the history we are returning
       return { shell: basename(existing.file), replay, fresh: false }
@@ -226,6 +234,7 @@ export function registerPtyIpc(): void {
       proc,
       file,
       owner,
+      view: opts.viewId,
       history: [],
       historyLen: 0,
       pending: '',
@@ -253,9 +262,13 @@ export function registerPtyIpc(): void {
     return { shell: basename(file), replay: '', fresh: true }
   })
 
-  ipcMain.on(IPC.ptyDetach, (event, paneId: string) => {
+  ipcMain.on(IPC.ptyDetach, (event, paneId: string, viewId: string) => {
     const s = sessions.get(paneId)
-    if (s && s.owner === event.sender) s.owner = null
+    // Only the view that is attached right now can detach; an older one has nothing to release.
+    if (s && s.owner === event.sender && s.view === viewId) {
+      s.owner = null
+      s.view = null
+    }
   })
 
   ipcMain.on(IPC.ptyWrite, (_e, paneId: string, data: string) => {

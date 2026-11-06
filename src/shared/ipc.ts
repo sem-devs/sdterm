@@ -47,6 +47,11 @@ export type AppCommand = 'new-pane' | 'close-pane' | 'new-workspace' | 'open-set
 export interface PtyAttachOptions {
   /** The pane id doubles as the session id: one shell per pane, owned by the main process. */
   paneId: string
+  /**
+   * Identifies this particular view of the pane. A stale detach from a view that has already been
+   * replaced (React mounts twice in development) must not detach the one that replaced it.
+   */
+  viewId: string
   cols: number
   rows: number
   /** Where a brand new shell starts when no last-known folder exists. */
@@ -66,7 +71,7 @@ export interface PtyApi {
   /** Starts the pane's shell, or re-attaches this window to the one already running. */
   attach: (opts: PtyAttachOptions) => Promise<PtyAttachResult>
   /** This window stops showing the shell; the shell keeps running. */
-  detach: (paneId: string) => void
+  detach: (paneId: string, viewId: string) => void
   write: (paneId: string, data: string) => void
   resize: (paneId: string, cols: number, rows: number) => void
   /** Ends the shell for good (closing a terminal). */

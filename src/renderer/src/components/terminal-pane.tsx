@@ -65,6 +65,7 @@ export function TerminalPane({ paneId, focused, visible, cwd }: Props): React.JS
     const host = hostRef.current!
     const { pty } = window.api
     const cfg = useSettings.getState().settings.terminal
+    const viewId = crypto.randomUUID()
 
     const term = new Terminal({
       fontFamily: terminalFontFamily(cfg),
@@ -156,6 +157,7 @@ export function TerminalPane({ paneId, focused, visible, cwd }: Props): React.JS
     void pty
       .attach({
         paneId,
+        viewId,
         cols: term.cols,
         rows: term.rows,
         shell: cfg.shell || undefined,
@@ -163,7 +165,7 @@ export function TerminalPane({ paneId, focused, visible, cwd }: Props): React.JS
       })
       .then(({ replay }) => {
         if (disposed) {
-          pty.detach(paneId)
+          pty.detach(paneId, viewId)
           return
         }
         if (replay) term.write(replay)
@@ -218,7 +220,7 @@ export function TerminalPane({ paneId, focused, visible, cwd }: Props): React.JS
       cleanups.forEach((fn) => fn())
       // Detach, do not kill: the shell belongs to the pane, not to this view. It is ended only
       // when the terminal is closed or its workspace is parked or deleted.
-      pty.detach(paneId)
+      pty.detach(paneId, viewId)
       gpuRef.current?.(false)
       gpuRef.current = null
       term.dispose()

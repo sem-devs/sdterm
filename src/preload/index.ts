@@ -29,7 +29,7 @@ const api: SdtermApi = {
   initial: ipcRenderer.sendSync(IPC.storeLoad) as StoreData,
   pty: {
     attach: (opts) => ipcRenderer.invoke(IPC.ptyAttach, opts),
-    detach: (paneId) => ipcRenderer.send(IPC.ptyDetach, paneId),
+    detach: (paneId, viewId) => ipcRenderer.send(IPC.ptyDetach, paneId, viewId),
     write: (paneId, data) => ipcRenderer.send(IPC.ptyWrite, paneId, data),
     resize: (paneId, cols, rows) => ipcRenderer.send(IPC.ptyResize, paneId, cols, rows),
     kill: (paneId) => ipcRenderer.send(IPC.ptyKill, paneId),
