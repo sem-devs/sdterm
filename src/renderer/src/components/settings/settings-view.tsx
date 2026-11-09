@@ -9,6 +9,7 @@ import { useSettings } from '@/store/settings'
 import { useUi } from '@/store/ui'
 import { Choice, Range, Row, Section, TextField, Toggle } from './controls'
 import { RateUs } from './rate-us'
+import { useUpdates } from '@/store/updates'
 
 const isMac = window.api.platform === 'darwin'
 const mod = isMac ? 'Cmd' : 'Ctrl+Shift'
@@ -353,6 +354,46 @@ function ExternalLink({
   )
 }
 
+function Updates(): React.JSX.Element {
+  const { state, startInstall } = useUpdates()
+  const autoCheck = useSettings((s) => s.settings.updates.autoCheck)
+  const set = useSettings((s) => s.set)
+  const busy =
+    state.status === 'checking' || state.status === 'downloading' || state.status === 'ready'
+  const text: Record<string, string> = {
+    idle: 'Not checked yet.',
+    checking: 'Checking...',
+    uptodate: 'sdterm is up to date.',
+    available: `Version ${state.version} is available.`,
+    downloading: `Downloading version ${state.version}: ${state.percent ?? 0}%`,
+    ready: 'Restarting to finish the update...',
+    error: `Could not check: ${state.message ?? 'unknown error'}`
+  }
+  return (
+    <Section
+      title="Updates"
+      description="sdterm tells you when a new version is out and updates itself when you say so."
+    >
+      <Row label="Check for updates" hint={text[state.status]}>
+        {state.status === 'available' ? (
+          <Button onClick={startInstall}>Update and restart</Button>
+        ) : (
+          <Button variant="outline" disabled={busy} onClick={() => void window.api.updates.check()}>
+            Check now
+          </Button>
+        )}
+      </Row>
+      <Row label="Check automatically" hint="At startup and every few hours." htmlFor="auto-update">
+        <Toggle
+          id="auto-update"
+          checked={autoCheck}
+          onChange={(v) => set('updates', 'autoCheck', v)}
+        />
+      </Row>
+    </Section>
+  )
+}
+
 function About(): React.JSX.Element {
   const reset = useSettings((s) => s.reset)
   const [info, setInfo] = useState<AppInfo | null>(null)
@@ -384,6 +425,8 @@ function About(): React.JSX.Element {
           <dd className="font-mono tabular-nums">{info?.chrome ?? '...'}</dd>
         </dl>
       </section>
+
+      <Updates />
 
       <RateUs />
 

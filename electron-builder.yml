@@ -50,6 +50,7 @@ win:
     - target: nsis
       arch: [x64, arm64]
 nsis:
+  differentialPackage: false
   artifactName: ${name}-${version}-${os}-${arch}-setup.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -78,5 +79,11 @@ appImage:
   artifactName: ${name}-${version}-${os}-${arch}.${ext}
 deb:
   artifactName: ${name}-${version}-${os}-${arch}.${ext}
+
+# Where the app looks for updates. Building writes latest.yml, latest-mac.yml and latest-linux.yml
+# next to the installers; scripts/publish-update.mjs uploads them with the installers.
+publish:
+  provider: generic
+  url: https://55xxovadfasfy2ql.public.blob.vercel-storage.com/sdterm/updates
 
 npmRebuild: false

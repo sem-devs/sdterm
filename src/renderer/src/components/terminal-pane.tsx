@@ -180,6 +180,48 @@ export function TerminalPane({ paneId, focused, visible, cwd }: Props): React.JS
       })
     )
 
+    // Dictation, the emoji picker and voice typing put text into the terminal without a character
+    // key behind it. xterm drops such text if it saw a key go down and never come back up, which is
+    // exactly what happens with the key that starts dictation, so the text vanishes. Forward it here.
+    // Ordinary typing (a printable keydown) and input-method composition are left to xterm.
+    const input = term.textarea
+    if (input) {
+      let printableDown = false
+      let composing = false
+      let composedAt = 0
+      const onKeyDown = (e: KeyboardEvent): void => {
+        printableDown = [...e.key].length === 1 && !e.ctrlKey && !e.metaKey
+      }
+      const onKeyUp = (): void => {
+        printableDown = false
+      }
+      const onCompositionStart = (): void => {
+        composing = true
+      }
+      const onCompositionEnd = (): void => {
+        composing = false
+        composedAt = Date.now()
+      }
+      const onBeforeInput = (e: InputEvent): void => {
+        if (e.inputType !== 'insertText' || !e.data) return
+        if (printableDown || composing || e.isComposing || Date.now() - composedAt < 60) return
+        e.preventDefault()
+        term.input(e.data)
+      }
+      input.addEventListener('keydown', onKeyDown, true)
+      input.addEventListener('keyup', onKeyUp, true)
+      input.addEventListener('compositionstart', onCompositionStart, true)
+      input.addEventListener('compositionend', onCompositionEnd, true)
+      input.addEventListener('beforeinput', onBeforeInput, true)
+      cleanups.push(() => {
+        input.removeEventListener('keydown', onKeyDown, true)
+        input.removeEventListener('keyup', onKeyUp, true)
+        input.removeEventListener('compositionstart', onCompositionStart, true)
+        input.removeEventListener('compositionend', onCompositionEnd, true)
+        input.removeEventListener('beforeinput', onBeforeInput, true)
+      })
+    }
+
     // Right-click menu, like the system terminal.
     const onContextMenu = (e: MouseEvent): void => {
       e.preventDefault()

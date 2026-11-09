@@ -45,6 +45,10 @@ export interface Settings {
     restoreOnLaunch: boolean
     autoColor: boolean
   }
+  updates: {
+    /** Look for a new version at startup and every few hours. */
+    autoCheck: boolean
+  }
   resources: {
     intervalMs: SampleInterval
     networkUnit: NetworkUnit
@@ -79,6 +83,7 @@ export const DEFAULT_SETTINGS: Settings = {
     copyOnSelect: false
   },
   workspaces: { restoreOnLaunch: true, autoColor: true },
+  updates: { autoCheck: true },
   resources: {
     intervalMs: 2000,
     networkUnit: 'bytes',

@@ -70,6 +70,12 @@ const api: SdtermApi = {
     unsubscribe: () => ipcRenderer.send(IPC.procUnsubscribe),
     onSample: (cb) => subscribe(IPC.procSample, cb)
   },
+  updates: {
+    get: () => ipcRenderer.invoke(IPC.updateGet),
+    check: () => ipcRenderer.invoke(IPC.updateCheck),
+    install: () => ipcRenderer.invoke(IPC.updateInstall),
+    onState: (cb) => subscribe(IPC.updateState, cb)
+  },
   windows: {
     open: (id) => ipcRenderer.send(IPC.windowOpen, id)
   },

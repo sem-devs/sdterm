@@ -110,6 +110,16 @@ export interface ProcessSnapshot {
   list: ProcessInfo[]
 }
 
+export interface UpdateState {
+  status: 'idle' | 'checking' | 'uptodate' | 'available' | 'downloading' | 'ready' | 'error'
+  /** The new version, once one is found. */
+  version?: string
+  notes?: string
+  /** Download progress, 0 to 100. */
+  percent?: number
+  message?: string
+}
+
 export interface AppInfo {
   name: string
   version: string

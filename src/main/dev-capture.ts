@@ -14,6 +14,9 @@ import { openWidget } from './widgets'
  *   SDTERM_OPEN_WIDGETS  comma separated widget kinds, e.g. "cpu,net"
  *   SDTERM_EVAL          JS run in the main window before capturing
  *   SDTERM_EVAL_TARGET     "widget" or "window:w2": run the snippet there instead of in main
+ *   SDTERM_INSERT_TEXT     text committed into the focused field after the snippet (like dictation)
+ *   SDTERM_CDP             JSON list of [method, params] sent to the main window's devtools protocol
+ *   SDTERM_EVAL2           JS run after that text was inserted
  *   SDTERM_EVAL_DELAY    ms to wait after the snippet (default 700)
  *   SDTERM_CAPTURE_DELAY ms after load before the first step (default 4500)
  */
@@ -48,6 +51,32 @@ export function runDevCapture(main: BrowserWindow): void {
           console.error('[capture] eval failed', err)
         }
         await new Promise((r) => setTimeout(r, Number(process.env.SDTERM_EVAL_DELAY ?? 700)))
+      }
+      // Raw Chromium input-method events (marked text, commit), e.g. [["Input.imeSetComposition", {...}]].
+      const cdp = process.env.SDTERM_CDP
+      if (cdp) {
+        const dbg = main.webContents.debugger
+        if (!dbg.isAttached()) dbg.attach('1.3')
+        for (const [method, params] of JSON.parse(cdp) as Array<[string, object]>) {
+          await dbg.sendCommand(method, params)
+          await new Promise((r) => setTimeout(r, 250))
+        }
+        const code3 = process.env.SDTERM_EVAL2
+        if (code3 && !process.env.SDTERM_INSERT_TEXT) {
+          const result: unknown = await main.webContents.executeJavaScript(code3)
+          if (result !== undefined) console.log('[capture] eval2 =>', JSON.stringify(result))
+        }
+      }
+      // Text that arrives like dictation or an input method does: committed into the focused field.
+      const insert = process.env.SDTERM_INSERT_TEXT
+      if (insert) {
+        main.webContents.insertText(insert)
+        await new Promise((r) => setTimeout(r, 800))
+        const code2 = process.env.SDTERM_EVAL2
+        if (code2) {
+          const result: unknown = await main.webContents.executeJavaScript(code2)
+          if (result !== undefined) console.log('[capture] eval2 =>', JSON.stringify(result))
+        }
       }
       for (const win of BrowserWindow.getAllWindows()) {
         const url = win.webContents.getURL()

@@ -1,5 +1,6 @@
 import type {
   AppInfo,
+  UpdateState,
   ProcessSnapshot,
   ResourceSample,
   StoreData,
@@ -40,7 +41,11 @@ export const IPC = {
   procUnsubscribe: 'processes:unsubscribe',
   procSample: 'processes:sample',
   openFolder: 'app:open-folder',
-  terminalMenu: 'app:terminal-menu'
+  terminalMenu: 'app:terminal-menu',
+  updateGet: 'update:get',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install',
+  updateState: 'update:state'
 } as const
 
 export type TerminalMenuChoice = 'copy' | 'paste' | 'select-all' | 'clear'
@@ -133,6 +138,14 @@ export interface SdtermApi {
     subscribe: () => Promise<ProcessSnapshot | null>
     unsubscribe: () => void
     onSample: (cb: (snapshot: ProcessSnapshot) => void) => () => void
+  }
+  updates: {
+    get: () => Promise<UpdateState>
+    /** Looks for a new version now. */
+    check: () => Promise<void>
+    /** Downloads the new version, installs it and restarts the app. */
+    install: () => Promise<void>
+    onState: (cb: (state: UpdateState) => void) => () => void
   }
   windows: {
     /** Opens (or focuses) an app window by id: "main", "w2", ... */

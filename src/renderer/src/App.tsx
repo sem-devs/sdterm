@@ -3,9 +3,15 @@ import { LayoutMenu } from '@/components/layout-menu'
 import { NewTerminalButton, PaneGrid } from '@/components/pane-grid'
 import { SettingsView } from '@/components/settings/settings-view'
 import { Sidebar } from '@/components/sidebar'
+import { UpdateBanner } from '@/components/update-banner'
 import { cn } from '@/lib/utils'
 import { useUi } from '@/store/ui'
-import { selectActive, startWorkspacePersistence, useWorkspaces } from '@/store/workspace'
+import {
+  WINDOW_ID,
+  selectActive,
+  startWorkspacePersistence,
+  useWorkspaces
+} from '@/store/workspace'
 
 const isMac = window.api.platform === 'darwin'
 
@@ -63,6 +69,7 @@ function App(): React.JSX.Element {
             </div>
           )}
         </div>
+        {WINDOW_ID === 'main' && <UpdateBanner />}
         <PaneGrid hidden={view === 'settings'} />
         {view === 'settings' && <SettingsView />}
       </main>

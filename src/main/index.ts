@@ -14,6 +14,7 @@ import {
 } from './store'
 import { registerResourcesIpc, setSampleInterval } from './resources'
 import { registerProcessesIpc } from './processes'
+import { registerUpdater } from './updater'
 import { registerWidgetIpc } from './widgets'
 import { getAppWindows, markQuitting, openAppWindow } from './windows'
 import { isMac, syncChrome } from './window'
@@ -78,6 +79,7 @@ app.whenReady().then(() => {
   registerPtyIpc()
   registerResourcesIpc()
   registerProcessesIpc()
+  registerUpdater()
   registerWidgetIpc()
   registerAppIpc()
 
