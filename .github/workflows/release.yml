@@ -1,39 +1,45 @@
 name: Build installers
 
-# Builds sdterm for macOS, Windows and Linux. Run it by hand (Actions, "Build installers") to get
-# the installers as downloadable artifacts, or push a tag like v1.0.2 to also draft a GitHub release.
+# Builds sdterm installers. Run it by hand (Actions, "Build installers") and pick one platform, or all.
+# macOS and Windows installers can also be built on a Mac with npm run build:mac / build:win; this is
+# mainly for Linux, which needs a Linux machine because node-pty is compiled there.
+# Pushing a tag like v1.0.3 builds everything and drafts a GitHub release.
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        options: [linux, macos, windows, all]
+        default: linux
   push:
     tags: ['v*']
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        env:
+          PLATFORM: ${{ inputs.platform || 'all' }}
+        run: |
+          all='[
+            {"key":"macos","name":"macOS (Apple Silicon and Intel)","os":"macos-latest","script":"build:mac","artifact":"sdterm-macos","files":"dist/*.dmg\ndist/*.zip\ndist/latest-mac.yml"},
+            {"key":"windows","name":"Windows (x64 and ARM64)","os":"windows-latest","script":"build:win","artifact":"sdterm-windows","files":"dist/*.exe\ndist/latest.yml"},
+            {"key":"linux","name":"Linux (x64)","os":"ubuntu-latest","script":"build:linux","artifact":"sdterm-linux","files":"dist/*.AppImage\ndist/*.deb\ndist/latest-linux.yml"}
+          ]'
+          echo "matrix=$(echo "$all" | jq -c --arg p "$PLATFORM" 'map(select($p == "all" or .key == $p))')" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.name }}
+    needs: plan
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: macOS (Apple Silicon and Intel)
-            os: macos-latest
-            script: build:mac
-            artifact: sdterm-macos
-            files: |
-              dist/*.dmg
-              dist/*.zip
-          - name: Windows (x64 and ARM64)
-            os: windows-latest
-            script: build:win
-            artifact: sdterm-windows
-            files: dist/*.exe
-          - name: Linux (x64)
-            os: ubuntu-latest
-            script: build:linux
-            artifact: sdterm-linux
-            files: |
-              dist/*.AppImage
-              dist/*.deb
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
