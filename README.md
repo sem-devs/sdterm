@@ -61,4 +61,4 @@ Bug reports and pull requests are welcome. For anything else, write to info@sem-
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The SEM Devs name and logo are trademarks of SEM Devs and are not covered by the license.
+MIT, see [LICENSE](LICENSE). The SEM Devs name and logo are trademarks of SEM Devs and are not covered by the license, see [TRADEMARKS.md](TRADEMARKS.md).
