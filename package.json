@@ -1,6 +1,6 @@
 {
   "name": "sdterm",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A local terminal workspace: many terminals, one window.",
   "main": "./out/main/index.js",
   "author": {
