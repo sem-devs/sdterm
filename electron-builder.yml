@@ -28,8 +28,8 @@ mac:
       arch: [arm64, x64]
     - target: zip
       arch: [arm64, x64]
-  # Ad-hoc signature ("-"): valid on its own, tied to no Apple account. Replace with a Developer ID
-  # identity (and set notarize: true) once SEM Devs has an Apple Developer ID certificate.
+  # Ad-hoc signature ("-") so anyone can build the app. The release is built with
+  # `npm run build:mac:release`, which signs with the SEM Devs Developer ID and notarizes it.
   identity: '-'
   hardenedRuntime: false
   gatekeeperAssess: false

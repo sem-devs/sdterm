@@ -61,6 +61,5 @@ run, with a message saying what is missing, unless the Mac has:
 When it finishes it checks every app with `codesign`, `spctl` and `stapler` and fails if any of them
 disagrees. The update steps below are unchanged.
 
-The macOS build is signed ad hoc, so macOS updates are done by the app itself (download, check, swap the
-app, reopen). With an Apple Developer ID certificate, set `mac.identity` and `notarize` in
-`electron-builder.yml` and macOS can use the standard updater like the other platforms.
+macOS updates are done by the app itself (download, check the checksum and the signature, swap the app,
+reopen), for signed and for ad hoc builds alike.

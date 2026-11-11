@@ -27,7 +27,7 @@ Free for macOS, Windows and Linux: **[sem-devs.com/sdterm](https://sem-devs.com/
 | Windows 10 and 11 | x64 and ARM64             |
 | Linux             | AppImage and .deb, x86_64 |
 
-The builds are not signed with a developer certificate yet, so the first launch shows a warning. On macOS, right-click the app and choose Open. On Windows, choose More info, then Run anyway.
+The macOS app is signed by SEM Devs and notarized by Apple, so it opens like any other Mac app. The Windows installer is not signed with a developer certificate yet: if Windows shows a warning, choose More info, then Run anyway.
 
 ## Why we built it
 
