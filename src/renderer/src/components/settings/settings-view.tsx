@@ -321,6 +321,7 @@ function Shortcuts(): React.JSX.Element {
     ['New terminal', `${mod}+T`],
     ['Close terminal', `${mod}+W`],
     ['New workspace', `${mod}+N`],
+    ['Show or hide the sidebar', `${mod}+B`],
     ['Settings', isMac ? 'Cmd+,' : 'Ctrl+Shift+,']
   ]
   if (!isMac) rows.push(['Copy / paste', 'Ctrl+Shift+C / V'])

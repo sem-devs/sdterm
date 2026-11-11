@@ -10,7 +10,8 @@ import { selectActive, useWorkspaces } from '@/store/workspace'
 
 /** A miniature of what the layout looks like with four terminals, like window-snapping tools. */
 function Thumb({ layout }: { layout: LayoutId }): React.JSX.Element {
-  const l = computeLayout(layout, 4, null)
+  // Quarters is the one layout that also works with fewer: show two terminals and two open spots.
+  const l = computeLayout(layout, layout === 'quarters' ? 2 : 4, null)
   return (
     <div
       aria-hidden
@@ -21,6 +22,13 @@ function Thumb({ layout }: { layout: LayoutId }): React.JSX.Element {
         <span
           key={i}
           className="bg-muted-foreground/40 rounded-[2px]"
+          style={{ gridColumn: c.col, gridRow: c.row }}
+        />
+      ))}
+      {l.empty.map((c, i) => (
+        <span
+          key={`empty-${i}`}
+          className="border-muted-foreground/40 rounded-[2px] border border-dashed"
           style={{ gridColumn: c.col, gridRow: c.row }}
         />
       ))}

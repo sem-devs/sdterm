@@ -8,9 +8,15 @@ export const LAYOUT_LABELS: Record<LayoutId, string> = {
   columns: 'Columns',
   rows: 'Rows',
   grid: 'Grid',
+  quarters: 'Quarters',
   'main-left': 'Main on the left',
   'main-right': 'Main on the right',
   'main-top': 'Main on top'
+}
+
+export interface Cell {
+  col: string
+  row: string
 }
 
 export interface LayoutResult {
@@ -18,7 +24,9 @@ export interface LayoutResult {
   cols: string
   rows: string
   /** Where each terminal goes, in the order of the workspace's terminals. */
-  cells: Array<{ col: string; row: string }>
+  cells: Cell[]
+  /** Free spots of a fixed layout (quarters) that have no terminal yet. */
+  empty: Cell[]
   /** The divider you can drag: along x (between columns) or y (between rows), if any. */
   axis: 'x' | 'y' | null
   /** Position of that divider as a fraction from the left/top edge. */
@@ -32,6 +40,7 @@ const equal = (n: number): string => `repeat(${n}, minmax(0, 1fr))`
 
 /** What "auto" means for a given number of terminals. */
 export function resolveLayout(layout: LayoutId, count: number): Exclude<LayoutId, 'auto'> {
+  if (layout === 'quarters') return count > 4 ? 'grid' : 'quarters' // five or more need more room
   if (layout !== 'auto') return layout
   if (count <= 2) return 'columns'
   if (count === 3) return 'main-left'
@@ -40,12 +49,29 @@ export function resolveLayout(layout: LayoutId, count: number): Exclude<LayoutId
 
 export function computeLayout(layout: LayoutId, count: number, split: number | null): LayoutResult {
   const n = Math.max(count, 1)
-  const base = { axis: null, dividerAt: 0.5, fromEnd: false } as const
-  if (n === 1) {
+  const base: Pick<LayoutResult, 'axis' | 'dividerAt' | 'fromEnd' | 'empty'> = {
+    axis: null,
+    dividerAt: 0.5,
+    fromEnd: false,
+    empty: []
+  }
+  const resolved = resolveLayout(layout, n)
+  if (n === 1 && resolved !== 'quarters') {
     return { ...base, cols: fr(1), rows: fr(1), cells: [{ col: '1', row: '1' }] }
   }
 
-  switch (resolveLayout(layout, n)) {
+  switch (resolved) {
+    case 'quarters': {
+      // Always four equal spots, filled in reading order. Spots without a terminal stay open.
+      const spot = (i: number): Cell => ({ col: `${(i % 2) + 1}`, row: `${Math.floor(i / 2) + 1}` })
+      return {
+        ...base,
+        cols: equal(2),
+        rows: equal(2),
+        cells: Array.from({ length: n }, (_, i) => spot(i)),
+        empty: Array.from({ length: 4 - n }, (_, i) => spot(n + i))
+      }
+    }
     case 'columns': {
       const s = n === 2 ? (split ?? 0.5) : null
       return {

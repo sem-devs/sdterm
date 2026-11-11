@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CaretDown, CaretRight, Gear, Play, Plus } from '@phosphor-icons/react'
+import { CaretDown, CaretRight, Gear, Play, Plus, SidebarSimple } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { BrandLogo } from '@/components/brand-logo'
@@ -20,6 +20,37 @@ import {
 } from '@/store/workspace'
 
 const isMac = window.api.platform === 'darwin'
+
+/** Shows or hides the sidebar. Lives in the sidebar's header, or in the main bar once hidden. */
+export function SidebarToggle(): React.JSX.Element {
+  const collapsed = useUi((s) => s.sidebarCollapsed)
+  const toggle = useUi((s) => s.toggleSidebar)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={collapsed ? 'Show sidebar' : 'Hide sidebar'}
+          aria-pressed={!collapsed}
+          onClick={toggle}
+        >
+          <SidebarSimple />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {collapsed ? 'Show' : 'Hide'} sidebar ({isMac ? '⌘B' : 'Ctrl+Shift+B'})
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** The running version, read once from the main process. */
+function useVersion(): string | null {
+  const [version, setVersion] = useState<string | null>(null)
+  useEffect(() => void window.api.app.info().then((i) => setVersion(i.version)), [])
+  return version
+}
 
 function WorkspaceName({
   ws,
@@ -175,6 +206,9 @@ export function Sidebar(): React.JSX.Element {
   const addWorkspace = useWorkspaces((s) => s.addWorkspace)
   const view = useUi((s) => s.view)
   const setView = useUi((s) => s.setView)
+  const openSettings = useUi((s) => s.openSettings)
+  const collapsed = useUi((s) => s.sidebarCollapsed)
+  const version = useVersion()
   const [showParked, setShowParked] = useState(false)
 
   const mine = useMemo(() => workspacesOf(workspaces), [workspaces])
@@ -182,6 +216,9 @@ export function Sidebar(): React.JSX.Element {
   const parked = mine.filter((w) => w.parked)
   // A parked workspace you are looking at stays visible in its list.
   const parkedOpen = showParked || parked.some((w) => w.id === activeId)
+
+  // Hidden: the toggle moves to the main bar. Terminals live in the main area, so they keep running.
+  if (collapsed) return <></>
 
   return (
     <aside className="bg-card flex w-60 shrink-0 flex-col border-r">
@@ -193,6 +230,9 @@ export function Sidebar(): React.JSX.Element {
         {WINDOW_ID !== 'main' && (
           <span className="text-muted-foreground text-xs">{windowLabel(WINDOW_ID)}</span>
         )}
+        <div className="app-no-drag ml-auto pr-2">
+          <SidebarToggle />
+        </div>
       </div>
 
       <div className="flex items-center justify-between pr-2 pl-4">
@@ -241,15 +281,26 @@ export function Sidebar(): React.JSX.Element {
 
       {/* The brand is always on screen, whichever view is open, but small and quiet. */}
       <footer className="flex h-9 shrink-0 items-center justify-between border-t pr-1.5 pl-4">
-        <a
-          href="https://sem-devs.com"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="SEM Devs website"
-          className="focus-visible:ring-ring/60 rounded-sm outline-none focus-visible:ring-2"
-        >
-          <BrandLogo className="text-foreground h-3.5 w-auto opacity-60 transition-opacity hover:opacity-100" />
-        </a>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <a
+            href="https://sem-devs.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="SEM Devs website"
+            className="focus-visible:ring-ring/60 rounded-sm outline-none focus-visible:ring-2"
+          >
+            <BrandLogo className="text-foreground h-3.5 w-auto opacity-60 transition-opacity hover:opacity-100" />
+          </a>
+          {version && (
+            <button
+              onClick={() => openSettings('about')}
+              title="About sdterm"
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/60 rounded-sm font-mono text-[11px] tabular-nums outline-none focus-visible:ring-2"
+            >
+              v{version}
+            </button>
+          )}
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

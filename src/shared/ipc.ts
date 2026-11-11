@@ -50,7 +50,8 @@ export const IPC = {
 
 export type TerminalMenuChoice = 'copy' | 'paste' | 'select-all' | 'clear'
 
-export type AppCommand = 'new-pane' | 'close-pane' | 'new-workspace' | 'open-settings'
+export type AppCommand =
+  'new-pane' | 'close-pane' | 'new-workspace' | 'open-settings' | 'toggle-sidebar'
 
 export interface PtyAttachOptions {
   /** The pane id doubles as the session id: one shell per pane, owned by the main process. */

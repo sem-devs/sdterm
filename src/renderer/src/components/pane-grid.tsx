@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { PaneHeader } from '@/components/pane-header'
 import { ParkedWorkspace } from '@/components/parked-workspace'
 import { TerminalPane } from '@/components/terminal-pane'
-import { PANE_MIME, computeLayout, type LayoutResult } from '@/lib/layout'
+import { PANE_MIME, computeLayout, type Cell, type LayoutResult } from '@/lib/layout'
 import { cn } from '@/lib/utils'
 import { selectActive, useWorkspaces, workspacesOf, type Workspace } from '@/store/workspace'
 
@@ -86,6 +86,26 @@ function PaneFrame({
           className="ring-primary bg-primary/10 pointer-events-none absolute inset-0 z-10 ring-2 ring-inset"
         />
       )}
+    </section>
+  )
+}
+
+/** An open spot in the quarters layout: one click starts a terminal there. */
+function EmptySlot({ cell }: { cell: Cell }): React.JSX.Element {
+  const addPane = useWorkspaces((s) => s.addPane)
+  return (
+    <section
+      className="bg-background flex min-h-0 min-w-0 p-3"
+      style={{ gridColumn: cell.col, gridRow: cell.row }}
+    >
+      <button
+        onClick={addPane}
+        className="text-muted-foreground hover:text-foreground hover:border-primary/60 hover:bg-accent/40 focus-visible:ring-ring/60 border-border flex flex-1 flex-col items-center justify-center gap-2 rounded-md border border-dashed text-sm transition-colors outline-none focus-visible:ring-2"
+      >
+        <Plus className="size-5" />
+        New terminal
+        <span className="font-mono text-xs opacity-70">{NEW_TERMINAL_HINT}</span>
+      </button>
     </section>
   )
 }
@@ -183,6 +203,9 @@ function Workspaced({ ws, visible }: { ws: Workspace; visible: boolean }): React
             visible={visible}
             cell={layout.cells[slot]}
           />
+        ))}
+        {layout.empty.map((cell, i) => (
+          <EmptySlot key={`empty-${i}`} cell={cell} />
         ))}
       </div>
       <Divider workspace={ws} layout={layout} containerRef={containerRef} />

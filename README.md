@@ -9,7 +9,7 @@ A terminal workspace for people who work on many projects at once. Free, by [SEM
 - **A name, a note and a color for every terminal.** Write what it is for and where you left off. You see it at a glance, in the title bar and in the sidebar.
 - **Your projects come back.** Quit and reopen: every workspace, terminal, name and note is there, and each terminal starts again in the folder it was in.
 - **Park what you are not working on.** A parked project stops its shells and costs nothing. Launch it again with one click.
-- **More than one window.** Spread projects over several windows, pick a layout (columns, rows, grid, one big and a few small) and drag terminals to rearrange them.
+- **More than one window.** Spread projects over several windows, pick a layout (columns, rows, grid, quarters, one big and a few small) and drag terminals to rearrange them.
 - **Live monitors.** CPU, RAM, disk and network, plus a list of the busiest processes. Pop any of them out as a small window and keep it on top.
 - **A normal terminal.** It runs your own shell with your own settings. Keys behave like Terminal.app on a Mac, macOS dictation works, and you can open any terminal's folder in Finder or Explorer.
 - **Updates itself.** A small banner tells you when a new version is out.

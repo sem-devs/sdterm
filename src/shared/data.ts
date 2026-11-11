@@ -15,6 +15,7 @@ export const LAYOUTS = [
   'columns',
   'rows',
   'grid',
+  'quarters',
   'main-left',
   'main-right',
   'main-top'

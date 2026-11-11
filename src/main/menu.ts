@@ -64,6 +64,7 @@ export function installMenu(isDev: boolean): void {
   const view: MenuItemConstructorOptions = {
     label: 'View',
     submenu: [
+      { label: 'Toggle Sidebar', accelerator: `${mod}+B`, click: () => send('toggle-sidebar') },
       ...(isDev ? ([{ role: 'toggleDevTools' }] as MenuItemConstructorOptions[]) : []),
       { role: 'togglefullscreen' }
     ]

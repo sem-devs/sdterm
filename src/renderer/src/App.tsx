@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { LayoutMenu } from '@/components/layout-menu'
 import { NewTerminalButton, PaneGrid } from '@/components/pane-grid'
 import { SettingsView } from '@/components/settings/settings-view'
-import { Sidebar } from '@/components/sidebar'
+import { Sidebar, SidebarToggle } from '@/components/sidebar'
 import { UpdateBanner } from '@/components/update-banner'
 import { cn } from '@/lib/utils'
 import { useUi } from '@/store/ui'
@@ -19,6 +19,7 @@ function App(): React.JSX.Element {
   const view = useUi((s) => s.view)
   const workspaceName = useWorkspaces((s) => selectActive(s)?.name ?? '')
   const parked = useWorkspaces((s) => selectActive(s)?.parked ?? false)
+  const collapsed = useUi((s) => s.sidebarCollapsed)
 
   useEffect(() => startWorkspacePersistence(), [])
 
@@ -29,6 +30,7 @@ function App(): React.JSX.Element {
         const s = useWorkspaces.getState()
         const ui = useUi.getState()
         if (cmd === 'open-settings') ui.setView(ui.view === 'settings' ? 'terminals' : 'settings')
+        if (cmd === 'toggle-sidebar') ui.toggleSidebar()
         if (cmd === 'new-pane') {
           ui.setView('terminals')
           s.addPane()
@@ -52,16 +54,25 @@ function App(): React.JSX.Element {
         {/* On Windows the native window controls overlay the right edge of this bar. */}
         <div
           className={cn(
-            'app-drag flex h-10 shrink-0 items-center justify-between border-b pl-4',
+            'app-drag flex h-10 shrink-0 items-center justify-between border-b',
+            // With the sidebar hidden, the macOS window buttons sit over the start of this bar.
+            collapsed ? (isMac ? 'pl-20' : 'pl-2') : 'pl-4',
             isMac ? 'pr-2' : 'pr-36'
           )}
         >
-          <h1 className="font-display text-[13px] font-semibold tracking-tight">
-            {view === 'settings' ? 'Settings' : workspaceName}
-            {view === 'terminals' && parked && (
-              <span className="text-muted-foreground ml-2 text-xs font-normal">Parked</span>
+          <div className="flex min-w-0 items-center gap-2">
+            {collapsed && (
+              <div className="app-no-drag">
+                <SidebarToggle />
+              </div>
             )}
-          </h1>
+            <h1 className="font-display truncate text-[13px] font-semibold tracking-tight">
+              {view === 'settings' ? 'Settings' : workspaceName}
+              {view === 'terminals' && parked && (
+                <span className="text-muted-foreground ml-2 text-xs font-normal">Parked</span>
+              )}
+            </h1>
+          </div>
           {view === 'terminals' && !parked && (
             <div className="app-no-drag flex items-center">
               <LayoutMenu />
