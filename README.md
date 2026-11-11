@@ -12,6 +12,7 @@ A terminal workspace for people who work on many projects at once. Free, by [SEM
 - **More than one window.** Spread projects over several windows, pick a layout (columns, rows, grid, quarters, one big and a few small) and drag terminals to rearrange them.
 - **Live monitors.** CPU, RAM, disk and network, plus a list of the busiest processes. Pop any of them out as a small window and keep it on top.
 - **A normal terminal.** It runs your own shell with your own settings. Keys behave like Terminal.app on a Mac, macOS dictation works, and you can open any terminal's folder in Finder or Explorer.
+- **Suggestions as you type.** With zsh (the Mac default), commands you ran before show up in grey and the right arrow accepts them; Tab completes git branches, npm scripts and more. Your own shell files are not touched, and it can be switched off in Settings.
 - **Updates itself.** A small banner tells you when a new version is out.
 
 ![Resource monitors as pop-out windows](docs/images/monitors.png)

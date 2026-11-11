@@ -209,6 +209,19 @@ function Terminal(): React.JSX.Element {
             onChange={(v) => set('terminal', 'copyOnSelect', v)}
           />
         </Row>
+        {window.api.platform !== 'win32' && (
+          <Row
+            label="Command suggestions"
+            hint="Shows commands you ran before in grey as you type (press the right arrow to accept) and completes git branches, npm scripts and more with Tab. Works with zsh, the default on macOS, and applies to terminals you open next. Your own shell files are left alone."
+            htmlFor="suggestions"
+          >
+            <Toggle
+              id="suggestions"
+              checked={t.suggestions}
+              onChange={(v) => set('terminal', 'suggestions', v)}
+            />
+          </Row>
+        )}
       </Section>
     </div>
   )

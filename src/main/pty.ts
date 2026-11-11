@@ -1,7 +1,7 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { existsSync, readlinkSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readlinkSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename } from 'node:path'
+import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
 import { app, ipcMain, type WebContents } from 'electron'
 import * as nodePty from 'node-pty'
@@ -88,6 +88,34 @@ function shellEnvironment(): Record<string, string> {
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'sdterm',
     TERM_PROGRAM_VERSION: app.getVersion()
+  }
+}
+
+// Command suggestions and Tab completion for zsh. zsh is pointed at a startup folder that runs the
+// user's own files first (resources/shell/zsh), so their ~/.zshrc is never edited.
+function shellIntegrationDir(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'shell')
+    : join(app.getAppPath(), 'resources', 'shell')
+}
+
+function suggestionEnvironment(file: string): Record<string, string> {
+  if (process.platform === 'win32' || basename(file) !== 'zsh') return {}
+  if (!getStore().settings.terminal.suggestions) return {}
+  const dir = shellIntegrationDir()
+  if (!existsSync(join(dir, 'zsh', '.zshrc'))) return {}
+  const state = join(app.getPath('userData'), 'shell')
+  try {
+    mkdirSync(state, { recursive: true })
+  } catch {
+    return {}
+  }
+  return {
+    ZDOTDIR: join(dir, 'zsh'),
+    SDTERM_ZDOTDIR_ORIG: process.env.ZDOTDIR ?? '',
+    SDTERM_SHELL_DIR: dir,
+    SDTERM_STATE_DIR: state,
+    SDTERM_SUGGESTIONS: '1'
   }
 }
 
@@ -247,7 +275,7 @@ export function registerPtyIpc(): void {
         cols: clampSize(opts.cols, 80),
         rows: clampSize(opts.rows, 24),
         cwd,
-        env: shellEnvironment()
+        env: { ...shellEnvironment(), ...suggestionEnvironment(shell.file) }
       })
 
     // A typo in the shell setting must not leave the user without any terminal.

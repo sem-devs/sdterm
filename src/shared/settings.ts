@@ -40,6 +40,8 @@ export interface Settings {
     startDirectory: string
     optionAsMeta: boolean
     copyOnSelect: boolean
+    /** Grey suggestions from earlier commands and smarter Tab completion (zsh). */
+    suggestions: boolean
   }
   workspaces: {
     restoreOnLaunch: boolean
@@ -80,7 +82,8 @@ export const DEFAULT_SETTINGS: Settings = {
     startDirectory: '',
     // Off, like Terminal.app: Option types characters (@ # [ ] on Italian and many other layouts).
     optionAsMeta: false,
-    copyOnSelect: false
+    copyOnSelect: false,
+    suggestions: true
   },
   workspaces: { restoreOnLaunch: true, autoColor: true },
   updates: { autoCheck: true },
