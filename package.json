@@ -22,6 +22,7 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run typecheck && electron-vite build && electron-builder --win --publish never",
     "build:mac": "npm run typecheck && electron-vite build && electron-builder --mac --publish never",
+    "build:mac:release": "node scripts/build-mac-release.mjs",
     "build:linux": "npm run typecheck && electron-vite build && electron-builder --linux --publish never",
     "publish:update": "node scripts/publish-update.mjs"
   },

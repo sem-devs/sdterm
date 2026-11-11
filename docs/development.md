@@ -45,6 +45,22 @@ mounts components twice in development, which exposes bugs a production build hi
    the installers and then `latest*.yml`, which is what running apps check.
 5. Create the GitHub release with the same files.
 
+### Signed macOS release (Developer ID)
+
+`npm run build:mac` is signed ad hoc so anyone can build the app. macOS ties privacy permissions
+(Documents, Desktop, Downloads) to the signature, so with an ad hoc build they are asked again after
+every update. The release is built with `npm run build:mac:release`, which signs with the SEM Devs
+Developer ID certificate, turns on the hardened runtime and has Apple notarize the app. It refuses to
+run, with a message saying what is missing, unless the Mac has:
+
+1. a "Developer ID Application" certificate in the login keychain (Xcode, Settings, Accounts,
+   Manage Certificates, +), and
+2. notary credentials in the keychain:
+   `xcrun notarytool store-credentials "sdterm-notary" --apple-id <Apple ID> --team-id <TEAM ID>`.
+
+When it finishes it checks every app with `codesign`, `spctl` and `stapler` and fails if any of them
+disagrees. The update steps below are unchanged.
+
 The macOS build is signed ad hoc, so macOS updates are done by the app itself (download, check, swap the
 app, reopen). With an Apple Developer ID certificate, set `mac.identity` and `notarize` in
 `electron-builder.yml` and macOS can use the standard updater like the other platforms.
